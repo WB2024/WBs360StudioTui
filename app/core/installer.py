@@ -22,6 +22,7 @@ from app.core.paths import (
 )
 from app.core.usb_manager import UsbManager
 from app.models.game_save import GameSaveItemData
+from app.models.god_game import GodGameItem
 from app.models.mod_item import DownloadFile, ModItemData
 from app.models.trainer import TrainerItem
 
@@ -300,3 +301,105 @@ class Installer:
             await self.downloader.download(df.url, target, progress_callback=_cb)
             out.append(target)
         return out
+
+    # ------------------------------------------------------------------
+    # GOD (Games on Demand) transfer
+    # ------------------------------------------------------------------
+
+    async def install_god_via_ftp(
+        self,
+        game: GodGameItem,
+        ftp_client: FtpClient,
+        dest_root: str,
+        progress: Optional[StageProgress] = None,
+    ) -> InstallResult:
+        """Transfer all files of a GOD game to the console via FTP.
+
+        Files are placed at:
+          {dest_root}/{title_id}/{content_type}/{rel_path}
+        """
+        result = InstallResult(success=False)
+
+        if not ftp_client.is_connected:
+            try:
+                await ftp_client.connect()
+            except Exception as e:
+                result.message = f"FTP connect failed: {e}"
+                return result
+
+        base = normalize_xbox_path(dest_root)
+        if not base.endswith("/"):
+            base += "/"
+        base += f"{game.title_id}/{game.content_type}/"
+
+        file_pairs = game.all_files()
+        total = len(file_pairs)
+        if progress:
+            progress("transfer", 0, total)
+
+        for idx, (lf, rel) in enumerate(file_pairs, 1):
+            remote = base + rel
+            try:
+                await ftp_client.upload_file(lf, remote)
+                result.files_transferred += 1
+            except Exception as e:
+                msg = f"Failed: {lf.name} → {remote}: {e}"
+                log.exception(msg)
+                result.errors.append(msg)
+            if progress:
+                progress("transfer", idx, total)
+
+        result.success = result.files_transferred > 0 and not result.errors
+        result.message = (
+            f"Transferred {result.files_transferred} of {total} file(s)" if result.success
+            else "; ".join(result.errors) if result.errors
+            else "Nothing transferred"
+        )
+        return result
+
+    async def install_god_via_usb(
+        self,
+        game: GodGameItem,
+        usb_root: str,
+        dest_xbox_path: str,
+        progress: Optional[StageProgress] = None,
+        usb_manager: Optional[UsbManager] = None,
+    ) -> InstallResult:
+        """Copy all files of a GOD game to a USB drive.
+
+        Files are placed at:
+          {usb_root}/{dest_xbox_path}/{title_id}/{content_type}/{rel_path}
+        """
+        usb_mgr = usb_manager or UsbManager()
+        result = InstallResult(success=False)
+
+        base = normalize_xbox_path(dest_xbox_path)
+        if not base.endswith("/"):
+            base += "/"
+        base += f"{game.title_id}/{game.content_type}/"
+
+        file_pairs = game.all_files()
+        total = len(file_pairs)
+        if progress:
+            progress("transfer", 0, total)
+
+        for idx, (lf, rel) in enumerate(file_pairs, 1):
+            remote = base + rel
+            try:
+                dest = map_xbox_path_to_usb(remote, usb_root)
+                await asyncio.to_thread(usb_mgr.copy_file, lf, dest)
+                result.files_transferred += 1
+            except Exception as e:
+                msg = f"Failed: {lf.name}: {e}"
+                log.exception(msg)
+                result.errors.append(msg)
+            if progress:
+                progress("transfer", idx, total)
+
+        result.success = result.files_transferred > 0 and not result.errors
+        result.message = (
+            f"Copied {result.files_transferred} of {total} file(s)" if result.success
+            else "; ".join(result.errors) if result.errors
+            else "Nothing transferred"
+        )
+        return result

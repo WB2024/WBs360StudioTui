@@ -62,6 +62,8 @@ class Settings:
     aurora_path: str = "Hdd:\\Aurora\\"
     game_paths: list[str] = field(default_factory=list)
     game_scan_depth: int = 4
+    local_god_path: str = ""
+    game_install_path: str = "Hdd:\\Content\\0000000000000000\\"
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -75,6 +77,8 @@ class Settings:
             "aurora_path": self.aurora_path,
             "game_paths": self.game_paths,
             "game_scan_depth": self.game_scan_depth,
+            "local_god_path": self.local_god_path,
+            "game_install_path": self.game_install_path,
         }
 
     @classmethod
@@ -94,6 +98,8 @@ class Settings:
             aurora_path=d.get("aurora_path", "Hdd:\\Aurora\\"),
             game_paths=list(d.get("game_paths") or []),
             game_scan_depth=int(d.get("game_scan_depth") or 4),
+            local_god_path=d.get("local_god_path", ""),
+            game_install_path=d.get("game_install_path", "Hdd:\\Content\\0000000000000000\\"),
         )
 
     # --- Profile mgmt ---

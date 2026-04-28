@@ -73,6 +73,20 @@ class SettingsScreen(Screen):
                 placeholder="4",
                 id="game_scan_depth",
             )
+            yield Static("\n[b cyan]Local GOD Path[/]")
+            yield Static("[dim]Local PC folder containing GOD (Games on Demand) format games.\nExpected structure: {GameName}/{TitleID}/{ContentType}/{ContainerFile}[/]")
+            yield Input(
+                value=self.app.settings.local_god_path,
+                placeholder="e.g. D:\\Xbox360\\GODs",
+                id="local_god_path",
+            )
+            yield Static("\n[b cyan]Game Install Destination[/]")
+            yield Static("[dim]Xbox path where GOD games will be transferred to.\ne.g. Hdd:\\Content\\0000000000000000\\ or Usb0\\Games[/]")
+            yield Input(
+                value=self.app.settings.game_install_path,
+                placeholder="e.g. Hdd:\\Content\\0000000000000000\\",
+                id="game_install_path",
+            )
             with Horizontal():
                 yield Button("Save", id="save_settings", variant="success")
                 yield Button("Back", id="back")
@@ -173,6 +187,8 @@ class SettingsScreen(Screen):
                 app.settings.game_scan_depth = max(1, int(self.query_one("#game_scan_depth", Input).value or "4"))
             except ValueError:
                 app.settings.game_scan_depth = 4
+            app.settings.local_god_path = self.query_one("#local_god_path", Input).value.strip()
+            app.settings.game_install_path = self.query_one("#game_install_path", Input).value.strip() or "Hdd:\\Content\\0000000000000000\\"
             save_settings(app.settings)
         elif bid == "refresh_db":
             self.run_worker(self._refresh_db_worker(), exclusive=True)

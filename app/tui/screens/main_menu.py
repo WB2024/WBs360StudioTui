@@ -14,6 +14,7 @@ from app.tui.screens.homebrew import HomebrewScreen
 from app.tui.screens.library import LibraryScreen
 from app.tui.screens.settings import SettingsScreen
 from app.tui.screens.trainers import TrainersScreen
+from app.tui.screens.transfer_games import TransferGamesScreen
 from app.tui.widgets.connection_bar import ConnectionBar
 
 
@@ -35,6 +36,7 @@ class MainMenuScreen(Screen):
                 yield Button("Game Saves", id="m_gs", classes="menu_button")
                 yield Button("Game Cheats", id="m_gc", classes="menu_button")
                 yield Button("Game Patches", id="m_gp", classes="menu_button")
+                yield Button("Transfer Games", id="m_tg", classes="menu_button", variant="warning")
                 yield Button("Settings", id="m_set", classes="menu_button")
                 yield Button("Quit", id="m_quit", classes="menu_button", variant="error")
         yield Footer()
@@ -68,6 +70,7 @@ class MainMenuScreen(Screen):
             "m_gs": GameSavesScreen,
             "m_gc": GameCheatsScreen,
             "m_gp": GamePatchesScreen,
+            "m_tg": TransferGamesScreen,
             "m_set": SettingsScreen,
         }
         cls = m.get(event.button.id)
