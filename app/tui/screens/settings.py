@@ -192,11 +192,11 @@ class SettingsScreen(Screen):
         try:
             await client.connect()
             await client.disconnect()
-            self.call_from_thread(self._set_ftp_status, f"Connection OK — {prof.host}:{prof.port}", True)
+            self._set_ftp_status(f"Connection OK — {prof.host}:{prof.port}", True)
         except Exception as e:
             msg = str(e)
             reason = msg.split(": ", 2)[-1] if ": " in msg else msg
-            self.call_from_thread(self._set_ftp_status, f"Failed: {reason}", False)
+            self._set_ftp_status(f"Failed: {reason}", False)
 
     async def _ftp_reconnect_worker(self, prof) -> None:
         client = FtpClient(prof.host, prof.port, prof.username, prof.password)
@@ -204,12 +204,12 @@ class SettingsScreen(Screen):
             await client.connect()
             await client.disconnect()
             self.app.set_connection_status(connected=True, host=f"{prof.host}:{prof.port}")
-            self.call_from_thread(self._set_ftp_status, f"Connected — {prof.host}:{prof.port}", True)
+            self._set_ftp_status(f"Connected — {prof.host}:{prof.port}", True)
         except Exception as e:
             msg = str(e)
             reason = msg.split(": ", 2)[-1] if ": " in msg else msg
             self.app.set_connection_status(connected=False)
-            self.call_from_thread(self._set_ftp_status, f"Reconnect failed: {reason}", False)
+            self._set_ftp_status(f"Reconnect failed: {reason}", False)
 
     async def _refresh_db_worker(self) -> None:
         try:
