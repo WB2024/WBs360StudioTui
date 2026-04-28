@@ -64,6 +64,7 @@ class Settings:
     game_scan_depth: int = 4
     local_god_path: str = ""
     game_install_path: str = "Hdd:\\Content\\0000000000000000\\"
+    local_iso_path: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -79,6 +80,7 @@ class Settings:
             "game_scan_depth": self.game_scan_depth,
             "local_god_path": self.local_god_path,
             "game_install_path": self.game_install_path,
+            "local_iso_path": self.local_iso_path,
         }
 
     @classmethod
@@ -100,6 +102,7 @@ class Settings:
             game_scan_depth=int(d.get("game_scan_depth") or 4),
             local_god_path=d.get("local_god_path", ""),
             game_install_path=d.get("game_install_path", "Hdd:\\Content\\0000000000000000\\"),
+            local_iso_path=d.get("local_iso_path", ""),
         )
 
     # --- Profile mgmt ---

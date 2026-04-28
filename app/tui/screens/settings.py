@@ -73,6 +73,13 @@ class SettingsScreen(Screen):
                 placeholder="4",
                 id="game_scan_depth",
             )
+            yield Static("\n[b cyan]Local ISO Path[/]")
+            yield Static("[dim]Local PC folder containing Xbox 360 ISO files.\nSupports flat (GameName.iso) and subfoldered ({GameName}/{GameName}.iso) layouts.[/]")
+            yield Input(
+                value=self.app.settings.local_iso_path,
+                placeholder="e.g. D:\\Xbox360\\ISOs",
+                id="local_iso_path",
+            )
             yield Static("\n[b cyan]Local GOD Path[/]")
             yield Static("[dim]Local PC folder containing GOD (Games on Demand) format games.\nExpected structure: {GameName}/{TitleID}/{ContentType}/{ContainerFile}[/]")
             yield Input(
@@ -189,6 +196,7 @@ class SettingsScreen(Screen):
                 app.settings.game_scan_depth = 4
             app.settings.local_god_path = self.query_one("#local_god_path", Input).value.strip()
             app.settings.game_install_path = self.query_one("#game_install_path", Input).value.strip() or "Hdd:\\Content\\0000000000000000\\"
+            app.settings.local_iso_path = self.query_one("#local_iso_path", Input).value.strip()
             save_settings(app.settings)
         elif bid == "refresh_db":
             self.run_worker(self._refresh_db_worker(), exclusive=True)
