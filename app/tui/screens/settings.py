@@ -11,6 +11,7 @@ from textual.screen import Screen
 from textual.widgets import Button, Footer, Header, Input, Label, ListItem, ListView, Static
 
 from app.config.settings import cache_dir, save_settings
+from app.core.ftp_client import FtpClient
 from app.tui.screens.connection import ConnectionScreen
 
 
@@ -28,6 +29,12 @@ class SettingsScreen(Screen):
                 yield Button("Edit", id="edit_profile")
                 yield Button("Delete", id="del_profile", variant="error")
                 yield Button("Set Default", id="default_profile")
+            yield Static("\n[b cyan]FTP Connection[/]")
+            yield Static("", id="ftp_status", classes="muted")
+            with Horizontal():
+                yield Button("Test Connection", id="ftp_test", variant="primary")
+                yield Button("Reconnect", id="ftp_reconnect", variant="success")
+                yield Button("Disconnect", id="ftp_disconnect")
             yield Static("\n[b cyan]Download Directory[/]")
             yield Input(value=self.app.settings.download_dir, id="dl_dir")
             yield Static("\n[b cyan]Cache[/]")
@@ -74,6 +81,7 @@ class SettingsScreen(Screen):
     def on_mount(self) -> None:
         self._refresh_profiles()
         self._refresh_cache_info()
+        self._refresh_ftp_status()
 
     def _refresh_profiles(self) -> None:
         lv = self.query_one("#profiles_list", ListView)
@@ -91,6 +99,17 @@ class SettingsScreen(Screen):
         else:
             text = f"Cache age: {age:.1f} hours  |  Path: {cache_dir()}"
         self.query_one("#cache_info", Static).update(text)
+
+    def _refresh_ftp_status(self) -> None:
+        s = self.app.connection_status
+        if s.get("connected"):
+            self.query_one("#ftp_status", Static).update(f"[green]Connected — {s['text']}[/]")
+        else:
+            self.query_one("#ftp_status", Static).update("[dim]Not connected[/]")
+
+    def _set_ftp_status(self, text: str, ok: bool | None = None) -> None:
+        colour = "green" if ok is True else "red" if ok is False else "white"
+        self.query_one("#ftp_status", Static).update(f"[{colour}]{text}[/]")
 
     def _selected_profile_id(self) -> str | None:
         lv = self.query_one("#profiles_list", ListView)
@@ -127,6 +146,23 @@ class SettingsScreen(Screen):
                     c.is_default = (c.id == pid)
                 save_settings(app.settings)
                 self._refresh_profiles()
+        elif bid == "ftp_test":
+            prof = app.settings.default_profile()
+            if prof is None:
+                self._set_ftp_status("No default profile configured.", ok=False)
+            else:
+                self._set_ftp_status("Testing…")
+                self.run_worker(self._ftp_test_worker(prof), exclusive=False)
+        elif bid == "ftp_reconnect":
+            prof = app.settings.default_profile()
+            if prof is None:
+                self._set_ftp_status("No default profile configured.", ok=False)
+            else:
+                self._set_ftp_status("Connecting…")
+                self.run_worker(self._ftp_reconnect_worker(prof), exclusive=False)
+        elif bid == "ftp_disconnect":
+            app.set_connection_status(connected=False)
+            self._refresh_ftp_status()
         elif bid == "save_settings":
             app.settings.download_dir = self.query_one("#dl_dir", Input).value
             app.settings.usb.manual_path = self.query_one("#usb_path", Input).value or None
@@ -150,6 +186,30 @@ class SettingsScreen(Screen):
                 self._refresh_cache_info()
             except Exception:
                 pass
+
+    async def _ftp_test_worker(self, prof) -> None:
+        client = FtpClient(prof.host, prof.port, prof.username, prof.password)
+        try:
+            await client.connect()
+            await client.disconnect()
+            self.call_from_thread(self._set_ftp_status, f"Connection OK — {prof.host}:{prof.port}", True)
+        except Exception as e:
+            msg = str(e)
+            reason = msg.split(": ", 2)[-1] if ": " in msg else msg
+            self.call_from_thread(self._set_ftp_status, f"Failed: {reason}", False)
+
+    async def _ftp_reconnect_worker(self, prof) -> None:
+        client = FtpClient(prof.host, prof.port, prof.username, prof.password)
+        try:
+            await client.connect()
+            await client.disconnect()
+            self.app.set_connection_status(connected=True, host=f"{prof.host}:{prof.port}")
+            self.call_from_thread(self._set_ftp_status, f"Connected — {prof.host}:{prof.port}", True)
+        except Exception as e:
+            msg = str(e)
+            reason = msg.split(": ", 2)[-1] if ": " in msg else msg
+            self.app.set_connection_status(connected=False)
+            self.call_from_thread(self._set_ftp_status, f"Reconnect failed: {reason}", False)
 
     async def _refresh_db_worker(self) -> None:
         try:
