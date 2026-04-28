@@ -145,13 +145,11 @@ class LibraryScreen(Screen):
         settings = app.settings
         prof = settings.default_profile()
         if prof is None:
-            self.call_from_thread(self._scan_done, {}, "No connection profile configured.")
+            self._scan_done({}, "No connection profile configured.")
             return
 
         def progress(msg: str) -> None:
-            self.call_from_thread(
-                lambda: self.query_one("#status_bar", StatusBar).set_text(msg)
-            )
+            self.query_one("#status_bar", StatusBar).set_text(msg)
 
         try:
             client = FtpClient(prof.host, prof.port, prof.username, prof.password)
@@ -166,17 +164,15 @@ class LibraryScreen(Screen):
             finally:
                 await client.disconnect()
         except FtpConnectionError as e:
-            self.call_from_thread(self._scan_done, {}, f"FTP error: {e}")
+            self._scan_done({}, f"FTP error: {e}")
             return
         except Exception as e:
-            self.call_from_thread(self._scan_done, {}, f"Scan failed: {e}")
+            self._scan_done({}, f"Scan failed: {e}")
             return
 
         save_library(library, cache_dir())
         app.library = library
-        self.call_from_thread(
-            self._scan_done, library, f"Scan complete — {len(library)} game(s) found."
-        )
+        self._scan_done(library, f"Scan complete — {len(library)} game(s) found.")
 
     def _scan_done(self, library: dict[str, str], message: str) -> None:
         self.query_one("#scan_btn", Button).disabled = False
