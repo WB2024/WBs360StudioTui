@@ -26,3 +26,14 @@ XBOX_PLATFORM_ALIASES = {"XBOX", "XBOX360", "X360"}
 
 # Common drive prefixes used in InstallPaths
 XBOX_DRIVE_PREFIXES = ("Hdd1:", "Hdd:", "Usb0:", "Usb1:", "Usb:", "DvdRom0:")
+
+# Maps Xbox drive prefix (lowercase) → FTP root directory name (as exposed by Aurora FTP)
+# Aurora FTP lists: Hdd1, Usb0, Usb1, System, HddX, SysExt, Game at the root.
+XBOX_DRIVE_TO_FTP: dict[str, str] = {
+    "hdd1:": "Hdd1",
+    "hdd:": "Hdd1",
+    "usb0:": "Usb0",
+    "usb1:": "Usb1",
+    "usb:": "Usb0",
+    "dvdrom0:": "Game",
+}

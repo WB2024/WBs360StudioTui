@@ -9,7 +9,25 @@ from typing import Optional
 
 import aioftp
 
-from app.core.paths import normalize_xbox_path, parent_dir
+from app.core.constants import XBOX_DRIVE_TO_FTP
+from app.core.paths import normalize_xbox_path, parent_dir, split_xbox_drive
+
+
+def _ftp_path(path: str) -> str:
+    """Map an Xbox install path to an FTP absolute path.
+
+    Aurora FTP root lists drives as: Hdd1, Usb0, Usb1, Game, etc.
+    e.g. 'Hdd:\\Aurora\\...' → '/Hdd1/Aurora/...'
+         'Usb0:\\Aurora\\...' → '/Usb0/Aurora/...'
+    """
+    norm = normalize_xbox_path(path)
+    prefix_lc = next((p for p in XBOX_DRIVE_TO_FTP if norm.lower().startswith(p)), None)
+    if prefix_lc:
+        ftp_drive = XBOX_DRIVE_TO_FTP[prefix_lc]
+        rest = norm[len(prefix_lc):].lstrip("/")
+        return f"/{ftp_drive}/{rest}" if rest else f"/{ftp_drive}"
+    # No recognised prefix — assume already absolute or relative
+    return norm if norm.startswith("/") else "/" + norm
 
 log = logging.getLogger(__name__)
 
@@ -77,28 +95,29 @@ class FtpClient:
         except FtpConnectionError:
             return False
 
+    async def _mkd(self, path: str) -> None:
+        """Send a raw MKD command, ignoring errors (dir already exists, unsupported, etc.)."""
+        try:
+            await asyncio.wait_for(
+                self._client.command(f"MKD {path}", expected_codes=("2xx", "5xx")),
+                timeout=self.OP_TIMEOUT,
+            )
+        except Exception:
+            pass  # Already exists or not supported — safe to ignore
+
     async def ensure_directory(self, remote_path: str) -> None:
         if not self._client:
             raise FtpConnectionError("Not connected")
-        norm = normalize_xbox_path(remote_path).rstrip("/")
-        if not norm or norm in ("/", ""):
+        # Strip drive prefix — FTP server sees / as root, no Hdd:/Usb: prefixes
+        norm = _ftp_path(remote_path).rstrip("/")
+        if not norm or norm == "/":
             return
-        # Walk parents
-        parts = norm.split("/")
+        # Walk and create each path segment using raw MKD (Xbox FTP doesn't support MLST/MLSD)
+        parts = [p for p in norm.split("/") if p]
         current = ""
         for part in parts:
-            if not part:
-                current = "/"
-                continue
-            current = (current.rstrip("/") + "/" + part) if current else part
-            try:
-                await asyncio.wait_for(
-                    self._client.make_directory(current),
-                    timeout=self.OP_TIMEOUT,
-                )
-            except (aioftp.AIOFTPException, asyncio.TimeoutError):
-                # Likely already exists or server timed out — ignore and continue
-                pass
+            current = current + "/" + part
+            await self._mkd(current)
 
     async def upload_file(
         self,
@@ -112,13 +131,13 @@ class FtpClient:
         if not local_path.exists():
             raise FtpTransferError(f"Local file not found: {local_path}")
 
-        norm_remote = normalize_xbox_path(remote_path)
-        await self.ensure_directory(parent_dir(norm_remote))
+        ftp_remote = _ftp_path(remote_path)
+        await self.ensure_directory(parent_dir(ftp_remote))
 
         total = local_path.stat().st_size
         sent = 0
         try:
-            async with self._client.upload_stream(norm_remote) as stream:
+            async with self._client.upload_stream(ftp_remote) as stream:
                 with local_path.open("rb") as f:
                     while True:
                         chunk = f.read(64 * 1024)
@@ -132,15 +151,15 @@ class FtpClient:
                             except Exception:
                                 pass
         except asyncio.TimeoutError as e:
-            raise FtpTransferError(f"Upload timed out for {norm_remote}") from e
+            raise FtpTransferError(f"Upload timed out for {ftp_remote}") from e
         except aioftp.AIOFTPException as e:
-            raise FtpTransferError(f"Upload failed for {norm_remote}: {e}") from e
+            raise FtpTransferError(f"Upload failed for {ftp_remote}: {e}") from e
 
     async def file_exists(self, remote_path: str) -> bool:
         if not self._client:
             raise FtpConnectionError("Not connected")
         try:
-            return await self._client.exists(normalize_xbox_path(remote_path))
+            return await self._client.exists(_ftp_path(remote_path))
         except aioftp.AIOFTPException:
             return False
 
