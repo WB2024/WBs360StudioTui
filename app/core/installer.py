@@ -31,6 +31,14 @@ log = logging.getLogger(__name__)
 StageProgress = Callable[[str, int, int], None]
 
 
+def _resolve_aurora(paths: list[str], aurora_path: str) -> list[str]:
+    """Replace {AURORAPATH} placeholder with the user's configured Aurora folder."""
+    norm = aurora_path.replace("\\", "/")
+    if not norm.endswith("/"):
+        norm += "/"
+    return [p.replace("{AURORAPATH}", norm) for p in paths]
+
+
 @dataclass
 class InstallResult:
     success: bool
@@ -154,6 +162,7 @@ class Installer:
         item: InstallableItem,
         ftp_client: FtpClient,
         progress: Optional[StageProgress] = None,
+        aurora_path: str = "Hdd:\\Aurora\\",
     ) -> InstallResult:
         result = InstallResult(success=False)
         files = _get_download_files(item)
@@ -172,7 +181,8 @@ class Installer:
             tmp = Path(tempfile.mkdtemp(prefix="x360tm-"))
             try:
                 root, local_files = await _prepare_local_files(df, self.downloader, tmp, progress)
-                mappings = _resolve_remote_paths(df.install_paths, local_files, root)
+                resolved_paths = _resolve_aurora(df.install_paths, aurora_path)
+                mappings = _resolve_remote_paths(resolved_paths, local_files, root)
                 if progress:
                     progress("transfer", 0, len(mappings))
                 for idx, (lf, remote) in enumerate(mappings, 1):
@@ -204,6 +214,7 @@ class Installer:
         usb_root: str,
         progress: Optional[StageProgress] = None,
         usb_manager: Optional[UsbManager] = None,
+        aurora_path: str = "Hdd:\\Aurora\\",
     ) -> InstallResult:
         usb_manager = usb_manager or UsbManager()
         result = InstallResult(success=False)
@@ -217,7 +228,8 @@ class Installer:
             try:
                 root, local_files = await _prepare_local_files(df, self.downloader, tmp, progress)
                 # Build same mapping as FTP, then translate Xbox path → USB local path
-                mappings = _resolve_remote_paths(df.install_paths, local_files, root)
+                resolved_paths = _resolve_aurora(df.install_paths, aurora_path)
+                mappings = _resolve_remote_paths(resolved_paths, local_files, root)
                 if progress:
                     progress("transfer", 0, len(mappings))
                 for idx, (lf, remote) in enumerate(mappings, 1):

@@ -41,6 +41,13 @@ class SettingsScreen(Screen):
                 placeholder="Manual USB mount (leave empty for auto-detect)",
                 id="usb_path",
             )
+            yield Static("\n[b cyan]Aurora Folder Path[/]")
+            yield Static("[dim]Used to resolve {AURORAPATH} in trainer install paths[/]")
+            yield Input(
+                value=self.app.settings.aurora_path,
+                placeholder="e.g. Hdd:\\Aurora\\",
+                id="aurora_path",
+            )
             with Horizontal():
                 yield Button("Save", id="save_settings", variant="success")
                 yield Button("Back", id="back")
@@ -105,6 +112,7 @@ class SettingsScreen(Screen):
         elif bid == "save_settings":
             app.settings.download_dir = self.query_one("#dl_dir", Input).value
             app.settings.usb.manual_path = self.query_one("#usb_path", Input).value or None
+            app.settings.aurora_path = self.query_one("#aurora_path", Input).value or "Hdd:\\Aurora\\"
             save_settings(app.settings)
         elif bid == "refresh_db":
             self.run_worker(self._refresh_db_worker(), exclusive=True)

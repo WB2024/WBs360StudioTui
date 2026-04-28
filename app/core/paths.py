@@ -8,10 +8,14 @@ from app.core.constants import XBOX_DRIVE_PREFIXES
 
 
 def normalize_xbox_path(path: str) -> str:
-    """Convert Windows backslashes to forward slashes for FTP."""
+    """Convert Windows backslashes to forward slashes for FTP, and collapse double slashes."""
     if not path:
         return path
-    return path.replace("\\", "/")
+    result = path.replace("\\", "/")
+    # Collapse consecutive slashes (e.g. from {AURORAPATH}/ + \subfolder)
+    while "//" in result:
+        result = result.replace("//", "/")
+    return result
 
 
 def is_directory_path(path: str) -> bool:

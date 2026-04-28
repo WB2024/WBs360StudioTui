@@ -115,7 +115,9 @@ async def run_install_flow(app, item: Any) -> None:
         try:
             await client.connect()
             app.set_connection_status(connected=True, host=f"{prof.host}:{prof.port}")
-            result: InstallResult = await installer.install_via_ftp(item, client, progress=cb)
+            result: InstallResult = await installer.install_via_ftp(
+                item, client, progress=cb, aurora_path=app.settings.aurora_path
+            )
             await client.disconnect()
             modal.set_done(result.message, success=result.success)
         except Exception as e:
@@ -138,7 +140,9 @@ async def run_install_flow(app, item: Any) -> None:
             modal.set_stage(f"{label}...", cur, total)
 
         try:
-            result = await installer.install_via_usb(item, usb_root, progress=cb)
+            result = await installer.install_via_usb(
+                item, usb_root, progress=cb, aurora_path=app.settings.aurora_path
+            )
             modal.set_done(result.message, success=result.success)
         except Exception as e:
             modal.set_done(f"Failed: {e}", success=False)

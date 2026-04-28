@@ -1,0 +1,48 @@
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+*.egg
+dist/
+build/
+*.spec
+
+# pytest
+.pytest_cache/
+.coverage
+htmlcov/
+
+# PyInstaller
+*.manifest
+
+# Logs
+*.log
+logs/
+
+# User data (platformdirs — settings, cache, logs live outside the repo)
+# Nothing to exclude here but listed for clarity
+
+# Temp install directories
+x360tm-*/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Downloaded/cached content (not committed)
+*.part

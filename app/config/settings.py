@@ -59,6 +59,7 @@ class Settings:
     connections: list[ConnectionProfile] = field(default_factory=list)
     usb: UsbSettings = field(default_factory=UsbSettings)
     last_db_fetch: str | None = None
+    aurora_path: str = "Hdd:\\Aurora\\"
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -69,6 +70,7 @@ class Settings:
             "connections": [c.to_dict() for c in self.connections],
             "usb": {"auto_detect": self.usb.auto_detect, "manual_path": self.usb.manual_path},
             "last_db_fetch": self.last_db_fetch,
+            "aurora_path": self.aurora_path,
         }
 
     @classmethod
@@ -85,6 +87,7 @@ class Settings:
                 manual_path=usb_d.get("manual_path"),
             ),
             last_db_fetch=d.get("last_db_fetch"),
+            aurora_path=d.get("aurora_path", "Hdd:\\Aurora\\"),
         )
 
     # --- Profile mgmt ---
