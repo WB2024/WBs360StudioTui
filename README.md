@@ -151,11 +151,10 @@ It pulls live data from the Arisen Studio public database — thousands of mods,
 - Clean **TCSS styling** with dark theme
 
 ---
-
-## 📦 Install
+## 📦 Install 
 
 ```bash
-git clone https://github.com/yourname/WBs360StudioTui
+git clone https://github.com/WB2024/WBs360StudioTui
 cd WBs360StudioTui
 
 python -m venv .venv
