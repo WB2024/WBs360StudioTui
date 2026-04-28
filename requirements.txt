@@ -1,0 +1,6 @@
+textual>=0.58.0
+httpx>=0.26.0
+aioftp>=0.21.0
+psutil>=5.9.0
+platformdirs>=4.1.0
+rich>=13.7.0

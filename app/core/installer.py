@@ -1,0 +1,266 @@
+"""Install orchestration: download → extract → transfer (FTP or USB)."""
+from __future__ import annotations
+
+import asyncio
+import logging
+import os
+import shutil
+import tempfile
+import zipfile
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, Optional, Union
+
+from app.core.downloader import Downloader
+from app.core.ftp_client import FtpClient
+from app.core.paths import (
+    is_directory_path,
+    join_xbox_path,
+    map_xbox_path_to_usb,
+    normalize_xbox_path,
+)
+from app.core.usb_manager import UsbManager
+from app.models.game_save import GameSaveItemData
+from app.models.mod_item import DownloadFile, ModItemData
+from app.models.trainer import TrainerItem
+
+log = logging.getLogger(__name__)
+
+# Generic progress callback: (stage_name: str, current: int, total: int)
+StageProgress = Callable[[str, int, int], None]
+
+
+@dataclass
+class InstallResult:
+    success: bool
+    message: str = ""
+    files_transferred: int = 0
+    errors: list[str] = field(default_factory=list)
+
+
+InstallableItem = Union[ModItemData, GameSaveItemData, TrainerItem]
+
+
+def _get_download_files(item: InstallableItem) -> list[DownloadFile]:
+    """Return DownloadFile-like list for any installable item."""
+    if isinstance(item, TrainerItem):
+        return [DownloadFile(
+            name=item.name,
+            url=item.url,
+            install_paths=list(item.install_paths or []),
+        )]
+    return list(item.download_files or [])
+
+
+def _get_item_name(item: InstallableItem) -> str:
+    return getattr(item, "name", "") or "item"
+
+
+def _is_zip(path: Path) -> bool:
+    if path.suffix.lower() == ".zip":
+        return True
+    try:
+        return zipfile.is_zipfile(path)
+    except OSError:
+        return False
+
+
+def _resolve_remote_paths(install_paths: list[str], local_files: list[Path], temp_root: Path) -> list[tuple[Path, str]]:
+    """
+    Map local files → remote install paths.
+    Rules:
+      - If 1 install path and N files: all files go into that directory
+        (preserving relative subpath when extracted from zip)
+      - If multiple install paths and same count of files: 1-to-1 in order
+      - If multiple install paths and different file count: each install path
+        receives ALL files (treat as broadcast — common for trainers with multiple HDD locations)
+    """
+    out: list[tuple[Path, str]] = []
+    if not install_paths:
+        return out
+
+    if len(install_paths) == 1:
+        ip = install_paths[0]
+        for lf in local_files:
+            if is_directory_path(ip):
+                # Preserve relative path within zip
+                rel = lf.relative_to(temp_root) if temp_root in lf.parents or lf == temp_root else Path(lf.name)
+                base = normalize_xbox_path(ip)
+                if not base.endswith("/"):
+                    base += "/"
+                out.append((lf, base + str(rel).replace(os.sep, "/")))
+            else:
+                # Exact file destination — only meaningful for single-file installs
+                out.append((lf, normalize_xbox_path(ip)))
+        return out
+
+    if len(install_paths) == len(local_files):
+        for lf, ip in zip(local_files, install_paths):
+            out.append((lf, join_xbox_path(ip, lf.name)))
+        return out
+
+    # Broadcast: every file to every install path
+    for ip in install_paths:
+        for lf in local_files:
+            if is_directory_path(ip):
+                rel = lf.relative_to(temp_root) if temp_root in lf.parents else Path(lf.name)
+                base = normalize_xbox_path(ip)
+                if not base.endswith("/"):
+                    base += "/"
+                out.append((lf, base + str(rel).replace(os.sep, "/")))
+            else:
+                out.append((lf, normalize_xbox_path(ip)))
+    return out
+
+
+async def _prepare_local_files(
+    download_file: DownloadFile,
+    downloader: Downloader,
+    temp_root: Path,
+    progress: Optional[StageProgress],
+) -> tuple[Path, list[Path]]:
+    """Download (and extract if zip). Return (extract_root, [local files])."""
+    name = download_file.name or "download.bin"
+    local = temp_root / name
+
+    def _dl_cb(cur: int, total: int) -> None:
+        if progress:
+            progress("download", cur, total)
+
+    if progress:
+        progress("download", 0, 0)
+    await downloader.download(download_file.url, local, progress_callback=_dl_cb)
+
+    if _is_zip(local):
+        if progress:
+            progress("extract", 0, 0)
+        extract_dir = temp_root / "extracted"
+        extract_dir.mkdir(parents=True, exist_ok=True)
+        with zipfile.ZipFile(local, "r") as zf:
+            zf.extractall(extract_dir)
+        files = [p for p in extract_dir.rglob("*") if p.is_file()]
+        return extract_dir, files
+
+    return temp_root, [local]
+
+
+class Installer:
+    def __init__(self, downloader: Optional[Downloader] = None) -> None:
+        self.downloader = downloader or Downloader()
+
+    async def install_via_ftp(
+        self,
+        item: InstallableItem,
+        ftp_client: FtpClient,
+        progress: Optional[StageProgress] = None,
+    ) -> InstallResult:
+        result = InstallResult(success=False)
+        files = _get_download_files(item)
+        if not files:
+            result.message = "No download files defined for this item"
+            return result
+
+        if not ftp_client.is_connected:
+            try:
+                await ftp_client.connect()
+            except Exception as e:
+                result.message = f"FTP connect failed: {e}"
+                return result
+
+        for df in files:
+            tmp = Path(tempfile.mkdtemp(prefix="x360tm-"))
+            try:
+                root, local_files = await _prepare_local_files(df, self.downloader, tmp, progress)
+                mappings = _resolve_remote_paths(df.install_paths, local_files, root)
+                if progress:
+                    progress("transfer", 0, len(mappings))
+                for idx, (lf, remote) in enumerate(mappings, 1):
+                    try:
+                        await ftp_client.upload_file(lf, remote)
+                        result.files_transferred += 1
+                    except Exception as e:
+                        msg = f"Failed uploading {lf.name} → {remote}: {e}"
+                        log.exception(msg)
+                        result.errors.append(msg)
+                    if progress:
+                        progress("transfer", idx, len(mappings))
+            except Exception as e:
+                msg = f"Install step failed: {e}"
+                log.exception(msg)
+                result.errors.append(msg)
+            finally:
+                shutil.rmtree(tmp, ignore_errors=True)
+
+        result.success = result.files_transferred > 0 and not result.errors
+        result.message = "Install complete" if result.success else (
+            "; ".join(result.errors) if result.errors else "Nothing transferred"
+        )
+        return result
+
+    async def install_via_usb(
+        self,
+        item: InstallableItem,
+        usb_root: str,
+        progress: Optional[StageProgress] = None,
+        usb_manager: Optional[UsbManager] = None,
+    ) -> InstallResult:
+        usb_manager = usb_manager or UsbManager()
+        result = InstallResult(success=False)
+        files = _get_download_files(item)
+        if not files:
+            result.message = "No download files defined for this item"
+            return result
+
+        for df in files:
+            tmp = Path(tempfile.mkdtemp(prefix="x360tm-"))
+            try:
+                root, local_files = await _prepare_local_files(df, self.downloader, tmp, progress)
+                # Build same mapping as FTP, then translate Xbox path → USB local path
+                mappings = _resolve_remote_paths(df.install_paths, local_files, root)
+                if progress:
+                    progress("transfer", 0, len(mappings))
+                for idx, (lf, remote) in enumerate(mappings, 1):
+                    try:
+                        dest = map_xbox_path_to_usb(remote, usb_root)
+                        await asyncio.to_thread(usb_manager.copy_file, lf, dest)
+                        result.files_transferred += 1
+                    except Exception as e:
+                        msg = f"Failed copying {lf.name} → {dest}: {e}"
+                        log.exception(msg)
+                        result.errors.append(msg)
+                    if progress:
+                        progress("transfer", idx, len(mappings))
+            except Exception as e:
+                msg = f"Install step failed: {e}"
+                log.exception(msg)
+                result.errors.append(msg)
+            finally:
+                shutil.rmtree(tmp, ignore_errors=True)
+
+        result.success = result.files_transferred > 0 and not result.errors
+        result.message = "Install complete" if result.success else (
+            "; ".join(result.errors) if result.errors else "Nothing transferred"
+        )
+        return result
+
+    async def download_only(
+        self,
+        item: InstallableItem,
+        destination_dir: str | Path,
+        progress: Optional[StageProgress] = None,
+    ) -> list[Path]:
+        files = _get_download_files(item)
+        out: list[Path] = []
+        dest = Path(destination_dir) / _get_item_name(item).replace("/", "_").replace("\\", "_")
+        dest.mkdir(parents=True, exist_ok=True)
+
+        def _cb(cur: int, total: int) -> None:
+            if progress:
+                progress("download", cur, total)
+
+        for df in files:
+            target = dest / (df.name or "download.bin")
+            await self.downloader.download(df.url, target, progress_callback=_cb)
+            out.append(target)
+        return out

@@ -1,0 +1,159 @@
+/* x360tm — Textual stylesheet */
+
+Screen {
+    background: #0d0d1a;
+}
+
+Header {
+    background: #1a1a2e;
+    color: #00d4ff;
+}
+
+Footer {
+    background: #111111;
+    color: #888888;
+}
+
+ConnectionBar {
+    height: 1;
+    background: #111111;
+    color: #888888;
+    padding: 0 1;
+}
+
+StatusBar {
+    height: 1;
+    background: #111111;
+    color: #888888;
+    padding: 0 1;
+}
+
+#main_menu {
+    align: center middle;
+    padding: 2;
+}
+
+#main_menu_buttons {
+    width: 50;
+    height: auto;
+    border: round #00d4ff;
+    padding: 1 2;
+}
+
+.menu_button {
+    width: 100%;
+    margin-bottom: 1;
+}
+
+#browser_layout {
+    layout: horizontal;
+}
+
+#browser_left {
+    width: 60%;
+    border-right: solid #1a1a2e;
+}
+
+#browser_right {
+    width: 40%;
+    padding: 1 2;
+}
+
+#filter_bar {
+    height: auto;
+    padding: 1;
+    background: #111111;
+}
+
+#filter_bar Input {
+    width: 1fr;
+}
+
+DataTable {
+    height: 1fr;
+}
+
+#detail_pane {
+    height: 1fr;
+    overflow-y: auto;
+}
+
+.detail_label {
+    color: #00d4ff;
+    text-style: bold;
+}
+
+.error {
+    color: #ff4444;
+}
+
+.success {
+    color: #00ff88;
+}
+
+.muted {
+    color: #888888;
+}
+
+ProgressModal {
+    align: center middle;
+}
+
+ProgressModal > Vertical {
+    width: 70;
+    height: auto;
+    border: round #00d4ff;
+    background: #1a1a2e;
+    padding: 2 3;
+}
+
+ConnectionScreen {
+    align: center middle;
+}
+
+ConnectionScreen > Vertical {
+    width: 60;
+    height: auto;
+    border: round #00d4ff;
+    background: #1a1a2e;
+    padding: 2 3;
+}
+
+InstallChoiceModal {
+    align: center middle;
+}
+
+InstallChoiceModal > Vertical {
+    width: 50;
+    height: auto;
+    border: round #00d4ff;
+    background: #1a1a2e;
+    padding: 2 3;
+}
+
+UsbChoiceModal {
+    align: center middle;
+}
+
+UsbChoiceModal > Vertical {
+    width: 70;
+    height: auto;
+    border: round #00d4ff;
+    background: #1a1a2e;
+    padding: 2 3;
+}
+
+SplashScreen {
+    align: center middle;
+}
+
+SplashScreen > Vertical {
+    width: auto;
+    height: auto;
+    align: center middle;
+}
+
+#splash_log {
+    color: #888888;
+    margin-top: 1;
+}
