@@ -192,10 +192,12 @@ class SettingsScreen(Screen):
         try:
             await client.connect()
             await client.disconnect()
+            self.app.set_connection_status(connected=True, host=f"{prof.host}:{prof.port}")
             self._set_ftp_status(f"Connection OK — {prof.host}:{prof.port}", True)
         except Exception as e:
             msg = str(e)
             reason = msg.split(": ", 2)[-1] if ": " in msg else msg
+            self.app.set_connection_status(connected=False)
             self._set_ftp_status(f"Failed: {reason}", False)
 
     async def _ftp_reconnect_worker(self, prof) -> None:
