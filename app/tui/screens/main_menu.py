@@ -54,6 +54,11 @@ class MainMenuScreen(Screen):
         s = self.app.connection_status
         bar.set_status(connected=s["connected"], text=s["text"])
 
+    def on_screen_resume(self) -> None:
+        bar = self.query_one("#conn_bar", ConnectionBar)
+        s = self.app.connection_status
+        bar.set_status(connected=s["connected"], text=s["text"])
+
     def on_button_pressed(self, event: Button.Pressed) -> None:
         m = {
             "m_lib": LibraryScreen,
