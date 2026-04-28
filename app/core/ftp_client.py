@@ -1,6 +1,7 @@
 """Async FTP client for Xbox 360 transfers."""
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import Callable
 from pathlib import Path
@@ -35,13 +36,20 @@ class FtpClient:
     def is_connected(self) -> bool:
         return self._client is not None
 
+    # Timeout (seconds) for each FTP socket operation and for mkdir/upload calls.
+    SOCKET_TIMEOUT = 20
+    OP_TIMEOUT = 30
+
     async def connect(self) -> bool:
         try:
-            self._client = aioftp.Client()
+            self._client = aioftp.Client(
+                socket_timeout=self.SOCKET_TIMEOUT,
+                connection_timeout=10,
+            )
             await self._client.connect(self.host, self.port)
             await self._client.login(self.username, self.password)
             return True
-        except (OSError, aioftp.AIOFTPException) as e:
+        except (OSError, aioftp.AIOFTPException, asyncio.TimeoutError) as e:
             self._client = None
             raise FtpConnectionError(f"Failed to connect to {self.host}:{self.port}: {e}") from e
 
@@ -84,9 +92,12 @@ class FtpClient:
                 continue
             current = (current.rstrip("/") + "/" + part) if current else part
             try:
-                await self._client.make_directory(current)
-            except aioftp.AIOFTPException:
-                # Likely already exists — ignore
+                await asyncio.wait_for(
+                    self._client.make_directory(current),
+                    timeout=self.OP_TIMEOUT,
+                )
+            except (aioftp.AIOFTPException, asyncio.TimeoutError):
+                # Likely already exists or server timed out — ignore and continue
                 pass
 
     async def upload_file(
@@ -113,13 +124,15 @@ class FtpClient:
                         chunk = f.read(64 * 1024)
                         if not chunk:
                             break
-                        await stream.write(chunk)
+                        await asyncio.wait_for(stream.write(chunk), timeout=self.OP_TIMEOUT)
                         sent += len(chunk)
                         if progress_callback:
                             try:
                                 progress_callback(sent, total)
                             except Exception:
-                                log.exception("progress_callback raised")
+                                pass
+        except asyncio.TimeoutError as e:
+            raise FtpTransferError(f"Upload timed out for {norm_remote}") from e
         except aioftp.AIOFTPException as e:
             raise FtpTransferError(f"Upload failed for {norm_remote}: {e}") from e
 

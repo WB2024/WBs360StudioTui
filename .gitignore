@@ -46,3 +46,5 @@ desktop.ini
 
 # Downloaded/cached content (not committed)
 *.part
+app/config/__pycache__/settings.cpython-314.pyc
+
