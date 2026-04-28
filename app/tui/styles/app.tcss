@@ -29,8 +29,9 @@ StatusBar {
 }
 
 #main_menu {
-    align: center middle;
+    align: center top;
     padding: 2;
+    overflow-y: auto;
 }
 
 #main_menu_buttons {

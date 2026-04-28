@@ -64,13 +64,14 @@ class ConnectionScreen(ModalScreen[ConnectionProfile | None]):
         if bid == "conn_test":
             self._set_status("Testing...")
             client = FtpClient(prof.host, prof.port, prof.username, prof.password)
-            ok = False
             try:
-                ok = await client.test_connection()
+                await client.connect()
+                await client.disconnect()
+                self._set_status("Connection OK", ok=True)
             except Exception as e:
-                self._set_status(f"Error: {e}", ok=False)
-                return
-            self._set_status("Connection OK" if ok else "Connection failed", ok=ok)
+                msg = str(e)
+                reason = msg.split(": ", 2)[-1] if ": " in msg else msg
+                self._set_status(f"Connection failed: {reason}", ok=False)
         elif bid == "conn_save":
             app = self.app  # type: ignore[assignment]
             if not prof.host:
