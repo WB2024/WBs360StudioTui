@@ -13,6 +13,7 @@ from typing import Any, Optional
 
 from app.config.settings import cache_dir
 from app.core import constants as C
+from app.core.library_scanner import load_csv_titles
 from app.core.downloader import DownloadError, Downloader
 from app.models.category import CategoryItem
 from app.models.game_cheat import GameCheatsData
@@ -58,6 +59,8 @@ class DatabaseManager:
         self.game_saves: list[GameSaveItemData] = []
         self.title_ids: dict[str, str] = {}
         self.game_patches: list[GamePatchItemData] = []
+        # CSV title lookup supplementing the Arisen title_ids.json.
+        self.csv_titles: dict[str, str] = self._load_csv_titles()
 
         self.last_fetch: Optional[datetime] = None
 
@@ -168,6 +171,11 @@ class DatabaseManager:
         # Either {Categories: [...]} or [...] directly
         items = data.get("Categories") if isinstance(data, dict) else data
         return [CategoryItem.from_json(x) for x in (items or [])]
+
+    def _load_csv_titles(self) -> dict[str, str]:
+        """Load bundled gamelist_xbox360.csv from project root (if present)."""
+        csv_path = Path(__file__).parent.parent.parent / "gamelist_xbox360.csv"
+        return load_csv_titles(csv_path)
 
     def _load_mod_list(self, key: str) -> list[ModItemData]:
         data = self._load_json(key)
@@ -280,7 +288,23 @@ class DatabaseManager:
     def resolve_game_title(self, title_id: str) -> str:
         if not title_id:
             return ""
-        return self.title_ids.get(title_id) or self.title_ids.get(title_id.upper()) or title_id
+        tid_up = title_id.upper()
+        return (
+            self.title_ids.get(title_id)
+            or self.title_ids.get(tid_up)
+            or self.csv_titles.get(tid_up)
+            or title_id
+        )
+
+    def library_category_ids(self, library: dict[str, str]) -> set[str]:
+        """Return category IDs whose resolved title matches a library game name.
+
+        Used to filter mods/saves (which use category_id) when library_only is on.
+        """
+        if not library:
+            return set()
+        lib_names = {self.resolve_game_title(tid).lower() for tid in library}
+        return {c.id for c in self.categories if c.title.lower() in lib_names}
 
     # --- Filters ---
     def get_game_mods(self, *, category_id: str = "", name: str = "", mod_type: str = "", region: str = "") -> list[ModItemData]:

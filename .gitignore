@@ -3,8 +3,9 @@
 venv/
 env/
 
-# Python
+# Python bytecode — all locations
 __pycache__/
+**/__pycache__/
 *.py[cod]
 *.pyo
 *.pyd
@@ -16,6 +17,7 @@ build/
 
 # pytest
 .pytest_cache/
+**/.pytest_cache/
 .coverage
 htmlcov/
 
@@ -25,9 +27,6 @@ htmlcov/
 # Logs
 *.log
 logs/
-
-# User data (platformdirs — settings, cache, logs live outside the repo)
-# Nothing to exclude here but listed for clarity
 
 # Temp install directories
 x360tm-*/
@@ -46,5 +45,4 @@ desktop.ini
 
 # Downloaded/cached content (not committed)
 *.part
-app/config/__pycache__/settings.cpython-314.pyc
 

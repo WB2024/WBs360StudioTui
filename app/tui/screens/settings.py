@@ -48,6 +48,24 @@ class SettingsScreen(Screen):
                 placeholder="e.g. Hdd:\\Aurora\\",
                 id="aurora_path",
             )
+            yield Static("\n[b cyan]Game Library Paths[/]")
+            yield Static(
+                "[dim]Xbox game folder paths to scan for Title ID subfolders.\n"
+                "Separate multiple paths with a semicolon.\n"
+                "e.g. Usb1\\Games;Usb0\\Games[/]"
+            )
+            yield Input(
+                value=";".join(self.app.settings.game_paths),
+                placeholder="e.g. Usb1\\Games",
+                id="game_paths",
+            )
+            yield Static("\n[b cyan]Library Scan Depth[/]")
+            yield Static("[dim]Max folder levels to traverse when scanning for Title IDs.\nSet to 4 if you use a friendly parent folder (Games/Minecraft/4D530A81).[/]")
+            yield Input(
+                value=str(self.app.settings.game_scan_depth),
+                placeholder="4",
+                id="game_scan_depth",
+            )
             with Horizontal():
                 yield Button("Save", id="save_settings", variant="success")
                 yield Button("Back", id="back")
@@ -113,6 +131,12 @@ class SettingsScreen(Screen):
             app.settings.download_dir = self.query_one("#dl_dir", Input).value
             app.settings.usb.manual_path = self.query_one("#usb_path", Input).value or None
             app.settings.aurora_path = self.query_one("#aurora_path", Input).value or "Hdd:\\Aurora\\"
+            raw_paths = self.query_one("#game_paths", Input).value
+            app.settings.game_paths = [p.strip() for p in raw_paths.split(";") if p.strip()]
+            try:
+                app.settings.game_scan_depth = max(1, int(self.query_one("#game_scan_depth", Input).value or "4"))
+            except ValueError:
+                app.settings.game_scan_depth = 4
             save_settings(app.settings)
         elif bid == "refresh_db":
             self.run_worker(self._refresh_db_worker(), exclusive=True)

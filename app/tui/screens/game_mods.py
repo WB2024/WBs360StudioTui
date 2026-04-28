@@ -14,7 +14,11 @@ class GameModsScreen(BrowserScreen):
 
     def get_rows(self, query: str) -> list[tuple[Any, list[str]]]:
         db = self.app.db  # type: ignore[attr-defined]
+        lib_ids = self.active_library_ids
+        lib_cats = db.library_category_ids(getattr(self.app, 'library', {})) if lib_ids is not None else None
         items = db.get_game_mods(name=query)
+        if lib_cats is not None:
+            items = [m for m in items if m.category_id in lib_cats]
         return [(m, [m.name, db.resolve_category_name(m.category_id), m.version, m.created_by, m.mod_type, m.region]) for m in items]
 
     def get_detail_fields(self, item) -> list[tuple[str, Any]]:

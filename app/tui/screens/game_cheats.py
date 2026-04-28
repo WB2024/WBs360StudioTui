@@ -17,8 +17,15 @@ class GameCheatsScreen(BrowserScreen):
 
     def get_rows(self, query: str) -> list[tuple[Any, list[str]]]:
         db = self.app.db
+        lib_ids = self.active_library_ids
+        lib_names: set[str] | None = None
+        if lib_ids is not None:
+            library: dict[str, str] = getattr(self.app, 'library', {})
+            lib_names = {db.resolve_game_title(tid).lower() for tid in library}
         rows = []
         for g in db.get_game_cheats(name=query):
+            if lib_names is not None and g.game.lower() not in lib_names:
+                continue
             for ch in g.cheats:
                 rows.append(((g, ch), [g.game, ch.name, g.region, g.version]))
         return rows

@@ -5,9 +5,10 @@ from pathlib import Path
 
 from textual.app import App
 
-from app.config.settings import Settings, load_settings
+from app.config.settings import Settings, load_settings, cache_dir
 from app.core.database import DatabaseManager
 from app.core.installer import Installer
+from app.core.library_scanner import load_library
 from app.core.logging_setup import setup_logging
 from app.tui.screens.splash import SplashScreen
 
@@ -23,6 +24,8 @@ class X360TuiApp(App):
         self.db: DatabaseManager = DatabaseManager()
         self.installer: Installer = Installer()
         self.connection_status: dict = {"connected": False, "text": "Not connected"}
+        # Library: {TITLE_ID_UPPER: ftp_path}, populated by library scan.
+        self.library: dict[str, str] = load_library(cache_dir())
 
     def on_mount(self) -> None:
         self.push_screen(SplashScreen())

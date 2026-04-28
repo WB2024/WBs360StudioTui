@@ -16,8 +16,11 @@ class GamePatchesScreen(BrowserScreen):
 
     def get_rows(self, query: str) -> list[tuple[Any, list[str]]]:
         db = self.app.db
+        lib_ids = self.active_library_ids
         rows = []
         for p in db.get_game_patches(name=query):
+            if lib_ids is not None and p.title_id.upper() not in lib_ids:
+                continue
             rows.append((p, [p.title_name or p.title_id, p.title_id, str(len(p.patches)), p.source_file]))
         return rows
 

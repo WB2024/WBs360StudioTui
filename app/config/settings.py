@@ -60,6 +60,8 @@ class Settings:
     usb: UsbSettings = field(default_factory=UsbSettings)
     last_db_fetch: str | None = None
     aurora_path: str = "Hdd:\\Aurora\\"
+    game_paths: list[str] = field(default_factory=list)
+    game_scan_depth: int = 4
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -71,6 +73,8 @@ class Settings:
             "usb": {"auto_detect": self.usb.auto_detect, "manual_path": self.usb.manual_path},
             "last_db_fetch": self.last_db_fetch,
             "aurora_path": self.aurora_path,
+            "game_paths": self.game_paths,
+            "game_scan_depth": self.game_scan_depth,
         }
 
     @classmethod
@@ -88,6 +92,8 @@ class Settings:
             ),
             last_db_fetch=d.get("last_db_fetch"),
             aurora_path=d.get("aurora_path", "Hdd:\\Aurora\\"),
+            game_paths=list(d.get("game_paths") or []),
+            game_scan_depth=int(d.get("game_scan_depth") or 4),
         )
 
     # --- Profile mgmt ---

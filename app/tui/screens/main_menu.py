@@ -11,6 +11,7 @@ from app.tui.screens.game_mods import GameModsScreen
 from app.tui.screens.game_patches import GamePatchesScreen
 from app.tui.screens.game_saves import GameSavesScreen
 from app.tui.screens.homebrew import HomebrewScreen
+from app.tui.screens.library import LibraryScreen
 from app.tui.screens.settings import SettingsScreen
 from app.tui.screens.trainers import TrainersScreen
 from app.tui.widgets.connection_bar import ConnectionBar
@@ -27,6 +28,7 @@ class MainMenuScreen(Screen):
             with Vertical(id="main_menu_buttons"):
                 yield Static("[b cyan]x360tm — Xbox 360 Mod Manager[/]")
                 yield Static("", id="counts", classes="muted")
+                yield Button("My Library", id="m_lib", classes="menu_button", variant="success")
                 yield Button("Game Mods", id="m_mods", classes="menu_button", variant="primary")
                 yield Button("Homebrew", id="m_hb", classes="menu_button")
                 yield Button("Trainers", id="m_tr", classes="menu_button")
@@ -39,11 +41,13 @@ class MainMenuScreen(Screen):
 
     def on_mount(self) -> None:
         db = self.app.db
+        library: dict = getattr(self.app, 'library', {})
+        lib_note = f"  |  Library: {len(library)} game(s)" if library else ""
         counts = (
             f"Mods: {len(db.game_mods)}  |  Homebrew: {len(db.homebrew)}  |  "
             f"Trainers: {sum(len(g.trainers) for g in db.trainers)}  |  "
             f"Saves: {len(db.game_saves)}  |  Cheats: {len(db.game_cheats)}  |  "
-            f"Patches: {len(db.game_patches)}"
+            f"Patches: {len(db.game_patches)}{lib_note}"
         )
         self.query_one("#counts", Static).update(counts)
         bar = self.query_one("#conn_bar", ConnectionBar)
@@ -52,6 +56,7 @@ class MainMenuScreen(Screen):
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         m = {
+            "m_lib": LibraryScreen,
             "m_mods": GameModsScreen,
             "m_hb": HomebrewScreen,
             "m_tr": TrainersScreen,

@@ -70,6 +70,65 @@ StatusBar {
     width: 1fr;
 }
 
+/* Library filter toggle button in browser filter bar */
+.lib_filter_off {
+    width: auto;
+    min-width: 12;
+    margin-left: 1;
+    background: #1a1a2e;
+    color: #888888;
+    border: none;
+}
+
+.lib_filter_on {
+    width: auto;
+    min-width: 12;
+    margin-left: 1;
+    background: #004433;
+    color: #00ff88;
+    border: none;
+}
+
+/* Library screen layout */
+#library_layout {
+    layout: horizontal;
+}
+
+#library_left {
+    width: 60%;
+    border-right: solid #1a1a2e;
+}
+
+#library_right {
+    width: 40%;
+    padding: 1 2;
+}
+
+#library_toolbar {
+    height: auto;
+    padding: 1;
+    background: #111111;
+    align: left middle;
+}
+
+#library_toolbar Button {
+    width: auto;
+    margin-right: 1;
+}
+
+#game_list {
+    height: 1fr;
+}
+
+#browse_buttons {
+    margin-top: 1;
+}
+
+.browse_btn {
+    width: 100%;
+    margin-bottom: 1;
+}
+
 DataTable {
     height: 1fr;
 }

@@ -14,8 +14,11 @@ class TrainersScreen(BrowserScreen):
 
     def get_rows(self, query: str) -> list[tuple[Any, list[str]]]:
         db = self.app.db
+        lib_ids = self.active_library_ids
         rows = []
         for game in db.get_trainers(name=query):
+            if lib_ids is not None and game.title_id.upper() not in lib_ids:
+                continue
             game_title = db.resolve_game_title(game.title_id)
             for t in game.trainers:
                 tag = "[A]" if t.trainer_type == "Aurora" else "[X]"
