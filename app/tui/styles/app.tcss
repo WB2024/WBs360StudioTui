@@ -120,6 +120,11 @@ StatusBar {
     height: 1fr;
 }
 
+#profiles_list {
+    height: auto;
+    max-height: 10;
+}
+
 #browse_buttons {
     margin-top: 1;
 }
