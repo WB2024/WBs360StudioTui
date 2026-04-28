@@ -82,7 +82,12 @@ async def _scan_recursive(
     depth: int,
     found: dict[str, str],
 ) -> None:
-    """Recursively list ftp_path, collecting Title ID folders."""
+    """Recursively list ftp_path, collecting Title ID folders.
+
+    Aurora's FTP server ignores absolute path arguments to LIST — it always
+    returns the root listing when a path is passed.  The only reliable approach
+    is CWD to the target directory, then LIST without a path argument.
+    """
     if depth <= 0:
         return
     inner = client._client  # type: ignore[attr-defined]
@@ -91,9 +96,10 @@ async def _scan_recursive(
 
     entries: list[tuple[str, bool]] = []
     try:
-        # raw_command=True forces LIST instead of MLSD (Aurora doesn't support MLSD).
         async with asyncio.timeout(LIST_TIMEOUT):
-            async for path_obj, info in inner.list(ftp_path, raw_command=True):
+            # CWD to the target path first, then LIST with no argument.
+            await inner.change_directory(ftp_path)
+            async for path_obj, info in inner.list(raw_command="LIST"):
                 name = path_obj.name
                 is_dir = info.get("type", "").lower() in ("dir", "cdir", "pdir", "")
                 entries.append((name, is_dir))
