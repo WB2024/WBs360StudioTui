@@ -26,7 +26,75 @@ Data powered by [Arisen Studio](https://arisen.studio) — the largest open Xbox
 
 </div>
 
-## 🚀 What is x360tm?
+## � Screenshots
+
+### Main Menu
+![Main Menu](Screenshots/Home.png)
+*The main menu shows your FTP connection status (green dot = connected), live database counts (583 trainers, 70 mods, 55 homebrew, 133 patches, etc.), and quick-access buttons for every category. My Library is pinned at the top in green.*
+
+---
+
+### My Library — Game List
+![My Library](Screenshots/MyLibrary.png)
+*After scanning your console via FTP, My Library lists all 27 detected games by name and Title ID. Select any game and use the right-hand panel to jump straight into its Trainers, Saves, Mods, Cheats, or Patches.*
+
+---
+
+### Trainers — Library Filter Active
+![Library Trainers](Screenshots/LibraryTrainers.png)
+*Browsing trainers with the library filter applied — only trainers for your installed games are shown. Here GTA V (`545408A7`) has both an Aurora trainer and an XBDM TrainerLoader. The detail pane shows the full install path using `{AURORAPATH}` substitution.*
+
+---
+
+### All Trainers
+![All Trainers](Screenshots/AllTrainers.png)
+*The full trainers browser — 583 trainers across hundreds of games. Search by game name, Title ID, or trainer name. The `[A]` prefix indicates Aurora-compatible trainers; `[X]` indicates XBDM. The Library button in the top-right toggles the library filter.*
+
+---
+
+### Game Mods
+![Game Mods](Screenshots/AllMods.png)
+*70 game mods browsable with name, game, version, author, mod type, and region. The detail pane shows description, credits, files list, and the install path. Library filter available.*
+
+---
+
+### Homebrew
+![Homebrew](Screenshots/AllHomebrew.png)
+*55 homebrew apps across categories: Utilities (XDRPC, JRPC2, XBDM, FakeAnim, GOD Unlocker…), Dashboards (Aurora, FSD, XeXDash…), and Emulators (Amiga360, DosBox, SNES360, Mupen64…). Each entry shows its install path.*
+
+---
+
+### Game Saves
+![Game Saves](Screenshots/AllSaves.png)
+*Pre-made save files for Xbox 360 games — max money, 100% completion, all items unlocked. Region and version shown. Installs directly to your console's save folder via FTP.*
+
+---
+
+### Game Cheats
+![Game Cheats](Screenshots/AllCheats.png)
+*Memory offset cheats for supported games. Shows game, cheat name, region, version, and raw memory offsets. Useful for JTAG/RGH users who apply cheats via memory patching tools.*
+
+---
+
+### Game Patches
+![Game Patches](Screenshots/AllPatches.png)
+*133 title update patches across games including Skyrim, Resident Evil series, GTA V, Mirror's Edge, and more. Source `.patch.toml` files listed with Title ID for accurate matching.*
+
+---
+
+### Settings — Top (Connection & Cache)
+![Settings Top](Screenshots/Settings1.png)
+*Settings page showing the connection profile (`My Xbox 360 — 192.168.1.187:21`), live FTP status (Connected — green), Test Connection / Reconnect / Disconnect buttons, download directory, cache age, and Aurora folder path configuration.*
+
+---
+
+### Settings — Bottom (Library Paths & Save)
+![Settings Bottom](Screenshots/Settings2.png)
+*Lower settings: game library paths (`Usb1\Games`), scan depth (4), and the Save button. All settings persist to JSON in the user config directory.*
+
+---
+
+## �🚀 What is x360tm?
 
 x360tm is a full-featured terminal UI for Xbox 360 modding. Instead of hunting through websites or manually FTP-ing files, you get a fast, searchable, keyboard-driven interface that connects directly to your console and installs everything for you.
 
