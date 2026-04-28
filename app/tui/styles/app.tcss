@@ -125,6 +125,11 @@ StatusBar {
     max-height: 10;
 }
 
+/* Button rows inside VerticalScroll collapse to height 1 without an explicit height */
+SettingsScreen Horizontal {
+    height: 3;
+}
+
 #browse_buttons {
     margin-top: 1;
 }
