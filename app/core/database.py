@@ -14,6 +14,12 @@ from typing import Any, Optional
 from app.config.settings import cache_dir
 from app.core import constants as C
 from app.core.library_scanner import load_csv_titles
+from app.core.local_library import (
+    load_local_game_saves,
+    load_local_homebrew,
+    load_local_mods,
+    load_local_trainers,
+)
 from app.core.downloader import DownloadError, Downloader
 from app.models.category import CategoryItem
 from app.models.game_cheat import GameCheatsData
@@ -59,6 +65,11 @@ class DatabaseManager:
         self.game_saves: list[GameSaveItemData] = []
         self.title_ids: dict[str, str] = {}
         self.game_patches: list[GamePatchItemData] = []
+        # Local content (from Local* repo folders)
+        self.local_trainers: list[TrainerGameItem] = []
+        self.local_mods: list[ModItemData] = []
+        self.local_homebrew: list[ModItemData] = []
+        self.local_game_saves: list[GameSaveItemData] = []
         # CSV title lookup supplementing the Arisen title_ids.json.
         self.csv_titles: dict[str, str] = self._load_csv_titles()
 
@@ -155,6 +166,11 @@ class DatabaseManager:
         self.game_saves = self._load_game_saves()
         self.title_ids = self._load_title_ids()
         self.game_patches = self._load_patches()
+        # Local content
+        self.local_trainers = load_local_trainers()
+        self.local_mods = load_local_mods()
+        self.local_homebrew = load_local_homebrew()
+        self.local_game_saves = load_local_game_saves()
 
     def _load_json(self, key: str) -> Any:
         p = self._path(key)
@@ -307,11 +323,47 @@ class DatabaseManager:
         return {c.id for c in self.categories if c.title.lower() in lib_names}
 
     # --- Filters ---
-    def get_game_mods(self, *, category_id: str = "", name: str = "", mod_type: str = "", region: str = "") -> list[ModItemData]:
-        return self._filter_mods(self.game_mods, category_id, name, mod_type, region)
+    def get_game_mods(self, *, category_id: str = "", name: str = "", mod_type: str = "", region: str = "", source: str = "all") -> list[ModItemData]:
+        pool = self._source_pool(self.game_mods, self.local_mods, source)
+        return self._filter_mods(pool, category_id, name, mod_type, region)
 
-    def get_homebrew(self, *, category_id: str = "", name: str = "") -> list[ModItemData]:
-        return self._filter_mods(self.homebrew, category_id, name, "", "")
+    def get_homebrew(self, *, category_id: str = "", name: str = "", source: str = "all") -> list[ModItemData]:
+        pool = self._source_pool(self.homebrew, self.local_homebrew, source)
+        return self._filter_mods(pool, category_id, name, "", "")
+
+    def _source_pool(self, online: list, local: list, source: str) -> list:
+        """Merge online/local lists based on source filter."""
+        if source == "online":
+            return online
+        if source == "local":
+            return local
+        return list(online) + list(local)
+
+    def _source_pool_trainers(self, source: str) -> list[TrainerGameItem]:
+        """Merge trainer lists; combine entries for the same title ID."""
+        if source == "online":
+            return self.trainers
+        if source == "local":
+            return self.local_trainers
+        # "all" — merge by title_id so each game shows as a single row
+        merged: dict[str, TrainerGameItem] = {}
+        for g in self.trainers:
+            merged[g.title_id.upper()] = TrainerGameItem(
+                title_id=g.title_id,
+                description=g.description,
+                trainers=list(g.trainers),
+            )
+        for g in self.local_trainers:
+            key = g.title_id.upper()
+            if key in merged:
+                merged[key].trainers.extend(g.trainers)
+            else:
+                merged[key] = TrainerGameItem(
+                    title_id=g.title_id,
+                    description=g.description,
+                    trainers=list(g.trainers),
+                )
+        return list(merged.values())
 
     def _filter_mods(
         self,
@@ -336,9 +388,10 @@ class DatabaseManager:
             out.append(m)
         return out
 
-    def get_trainers(self, *, title_id: str = "", name: str = "") -> list[TrainerGameItem]:
+    def get_trainers(self, *, title_id: str = "", name: str = "", source: str = "all") -> list[TrainerGameItem]:
+        pool = self._source_pool_trainers(source)
         out = []
-        for g in self.trainers:
+        for g in pool:
             if title_id and not _ci_eq(g.title_id, title_id):
                 continue
             if name:
@@ -349,9 +402,10 @@ class DatabaseManager:
             out.append(g)
         return out
 
-    def get_game_saves(self, *, category_id: str = "", name: str = "", region: str = "") -> list[GameSaveItemData]:
+    def get_game_saves(self, *, category_id: str = "", name: str = "", region: str = "", source: str = "all") -> list[GameSaveItemData]:
+        pool = self._source_pool(self.game_saves, self.local_game_saves, source)
         out = []
-        for s in self.game_saves:
+        for s in pool:
             if category_id and not _ci_eq(s.category_id, category_id):
                 continue
             if name:

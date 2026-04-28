@@ -16,7 +16,7 @@ class HomebrewScreen(BrowserScreen):
         db = self.app.db
         lib_ids = self.active_library_ids
         lib_cats = db.library_category_ids(getattr(self.app, 'library', {})) if lib_ids is not None else None
-        items = db.get_homebrew(name=query)
+        items = db.get_homebrew(name=query, source=self.active_source_filter)
         if lib_cats is not None:
             items = [m for m in items if m.category_id in lib_cats]
         return [(m, [m.name, db.resolve_category_name(m.category_id), m.version, m.created_by]) for m in items]

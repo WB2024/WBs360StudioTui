@@ -57,6 +57,7 @@ def _get_download_files(item: InstallableItem) -> list[DownloadFile]:
             name=item.name,
             url=item.url,
             install_paths=list(item.install_paths or []),
+            local_path=item.local_path,
         )]
     return list(item.download_files or [])
 
@@ -128,7 +129,30 @@ async def _prepare_local_files(
     temp_root: Path,
     progress: Optional[StageProgress],
 ) -> tuple[Path, list[Path]]:
-    """Download (and extract if zip). Return (extract_root, [local files])."""
+    """Download (and extract if zip). Return (extract_root, [local files]).
+
+    If download_file.local_path is set the file is copied from disk directly,
+    skipping any HTTP download.
+    """
+    # --- Local file (no download needed) ---
+    if download_file.local_path:
+        src = Path(download_file.local_path)
+        if not src.is_file():
+            raise FileNotFoundError(f"Local file not found: {src}")
+        dest = temp_root / src.name
+        shutil.copy2(src, dest)
+        if _is_zip(dest):
+            if progress:
+                progress("extract", 0, 0)
+            extract_dir = temp_root / "extracted"
+            extract_dir.mkdir(parents=True, exist_ok=True)
+            with zipfile.ZipFile(dest, "r") as zf:
+                zf.extractall(extract_dir)
+            files = [p for p in extract_dir.rglob("*") if p.is_file()]
+            return extract_dir, files
+        return temp_root, [dest]
+
+    # --- Remote download ---
     name = download_file.name or "download.bin"
     local = temp_root / name
 

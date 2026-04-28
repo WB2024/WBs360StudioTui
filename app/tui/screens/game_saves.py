@@ -16,7 +16,7 @@ class GameSavesScreen(BrowserScreen):
         db = self.app.db
         lib_ids = self.active_library_ids
         lib_cats = db.library_category_ids(getattr(self.app, 'library', {})) if lib_ids is not None else None
-        items = db.get_game_saves(name=query)
+        items = db.get_game_saves(name=query, source=self.active_source_filter)
         if lib_cats is not None:
             items = [s for s in items if s.category_id in lib_cats]
         return [(s, [s.name, db.resolve_category_name(s.category_id), s.region, s.version]) for s in items]

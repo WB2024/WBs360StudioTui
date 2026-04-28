@@ -21,6 +21,7 @@ class GameSaveItemData:
     game_mode: str = ""
     description: str = ""
     download_files: list[DownloadFile] = field(default_factory=list)
+    source: str = "online"  # "online" | "local"
 
     @classmethod
     def from_json(cls, d: dict[str, Any]) -> "GameSaveItemData":

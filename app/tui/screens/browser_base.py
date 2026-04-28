@@ -25,6 +25,7 @@ class BrowserScreen(Screen):
         Binding("escape", "back", "Back", show=True),
         Binding("slash", "focus_search", "Search", show=True),
         Binding("l", "toggle_library", "Library Filter", show=True),
+        Binding("s", "cycle_source", "Source", show=True),
         Binding("i", "install", "Install", show=True),
         Binding("d", "download", "Download", show=True),
         Binding("r", "refresh", "Refresh", show=True),
@@ -33,14 +34,15 @@ class BrowserScreen(Screen):
 
     SEARCH_PLACEHOLDER = "Search..."
 
+    # Source filter cycles: all → online → local → all
+    _SOURCE_CYCLE = ("all", "online", "local")
+    _SOURCE_LABELS = {"all": "Source: All", "online": "Source: Online", "local": "Source: Local"}
+
     def __init__(self, title_id_filter: str | None = None, **kwargs: Any) -> None:
-        """Args:
-            title_id_filter: When set (e.g. from My Library drill-down), restrict
-                results to this single Title ID.  Overrides the library-only toggle.
-        """
         super().__init__(**kwargs)
         self._title_id_filter: str | None = title_id_filter.upper() if title_id_filter else None
         self._library_only: bool = False
+        self._source_filter: str = "all"  # "all" | "online" | "local"
 
     @property
     def active_library_ids(self) -> set[str] | None:
@@ -56,6 +58,11 @@ class BrowserScreen(Screen):
                 return set(library.keys())
         return None
 
+    @property
+    def active_source_filter(self) -> str:
+        """Return current source filter: 'all' | 'online' | 'local'."""
+        return self._source_filter
+
     def compose(self) -> ComposeResult:
         yield Header(show_clock=False)
         yield ConnectionBar(id="conn_bar")
@@ -64,6 +71,7 @@ class BrowserScreen(Screen):
                 with Horizontal(id="filter_bar"):
                     yield Input(placeholder=self.SEARCH_PLACEHOLDER, id="search_input")
                     yield Button("Library", id="lib_filter_btn", classes="lib_filter_off")
+                    yield Button("Source: All", id="src_filter_btn", classes="src_filter_all")
                 yield ModTable(id="mod_table")
             with Vertical(id="browser_right"):
                 yield ModDetail(id="detail_pane")
@@ -72,12 +80,12 @@ class BrowserScreen(Screen):
 
     def on_mount(self) -> None:
         self.sub_title = self.TITLE
-        # When opened with a title_id_filter, seed the search bar for clarity.
         if self._title_id_filter:
             self.query_one("#search_input", Input).value = self._title_id_filter
         self._refresh_table()
         self._sync_conn_bar()
         self._update_lib_btn()
+        self._update_src_btn()
 
     def _sync_conn_bar(self) -> None:
         bar = self.query_one("#conn_bar", ConnectionBar)
@@ -99,6 +107,13 @@ class BrowserScreen(Screen):
             btn.remove_class("lib_filter_on")
             btn.add_class("lib_filter_off")
 
+    def _update_src_btn(self) -> None:
+        btn = self.query_one("#src_filter_btn", Button)
+        btn.label = self._SOURCE_LABELS[self._source_filter]
+        for cls in ("src_filter_all", "src_filter_online", "src_filter_local"):
+            btn.remove_class(cls)
+        btn.add_class(f"src_filter_{self._source_filter}")
+
     # --- Hooks for subclasses ---
     def get_columns(self) -> list[str]:
         raise NotImplementedError
@@ -112,7 +127,6 @@ class BrowserScreen(Screen):
     # --- Internal ---
     def _refresh_table(self) -> None:
         query = self.query_one("#search_input", Input).value.strip()
-        # When a title_id_filter is set, clear the query so the filter does the work.
         if self._title_id_filter:
             query = ""
         table = self.query_one("#mod_table", ModTable)
@@ -122,8 +136,9 @@ class BrowserScreen(Screen):
             self.query_one("#status_bar", StatusBar).set_text(f"Error: {e}")
             return
         table.populate(self.get_columns(), rows)
-        lib_note = " [library filter]" if self.active_library_ids else ""
-        self.query_one("#status_bar", StatusBar).set_text(f"{len(rows)} item(s){lib_note}")
+        lib_note = " [library]" if self.active_library_ids else ""
+        src_note = f" [{self._source_filter}]" if self._source_filter != "all" else ""
+        self.query_one("#status_bar", StatusBar).set_text(f"{len(rows)} item(s){lib_note}{src_note}")
 
     def on_input_changed(self, event: Input.Changed) -> None:
         if event.input.id == "search_input":
@@ -138,6 +153,8 @@ class BrowserScreen(Screen):
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "lib_filter_btn" and not self._title_id_filter:
             self.action_toggle_library()
+        elif event.button.id == "src_filter_btn":
+            self.action_cycle_source()
 
     def on_data_table_row_highlighted(self, event) -> None:
         table = self.query_one("#mod_table", ModTable)
@@ -166,6 +183,13 @@ class BrowserScreen(Screen):
             return  # fixed filter from Library drill-down; can't toggle
         self._library_only = not self._library_only
         self._update_lib_btn()
+        self._refresh_table()
+
+    def action_cycle_source(self) -> None:
+        """Cycle source filter: all → online → local → all."""
+        idx = self._SOURCE_CYCLE.index(self._source_filter)
+        self._source_filter = self._SOURCE_CYCLE[(idx + 1) % len(self._SOURCE_CYCLE)]
+        self._update_src_btn()
         self._refresh_table()
 
     def action_install(self) -> None:

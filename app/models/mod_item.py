@@ -13,6 +13,7 @@ class DownloadFile:
     last_updated: str = ""
     url: str = ""
     install_paths: list[str] = field(default_factory=list)
+    local_path: str = ""   # set when source=="local"; skips HTTP download
 
     @classmethod
     def from_json(cls, d: dict[str, Any]) -> "DownloadFile":
@@ -41,6 +42,7 @@ class ModItemData:
     mod_type: str = ""
     description: str = ""
     download_files: list[DownloadFile] = field(default_factory=list)
+    source: str = "online"  # "online" | "local"
 
     @classmethod
     def from_json(cls, d: dict[str, Any]) -> "ModItemData":

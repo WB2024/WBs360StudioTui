@@ -12,6 +12,8 @@ class TrainerItem:
     url: str = ""
     last_updated: str = ""
     install_paths: list[str] = field(default_factory=list)
+    source: str = "online"  # "online" | "local"
+    local_path: str = ""   # absolute path when source=="local"
 
     @property
     def trainer_type(self) -> str:

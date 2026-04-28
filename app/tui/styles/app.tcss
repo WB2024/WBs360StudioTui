@@ -89,6 +89,34 @@ StatusBar {
     border: none;
 }
 
+/* Source filter button — cycles All / Online / Local */
+.src_filter_all {
+    width: auto;
+    min-width: 14;
+    margin-left: 1;
+    background: #1a1a2e;
+    color: #888888;
+    border: none;
+}
+
+.src_filter_online {
+    width: auto;
+    min-width: 14;
+    margin-left: 1;
+    background: #001a44;
+    color: #66aaff;
+    border: none;
+}
+
+.src_filter_local {
+    width: auto;
+    min-width: 14;
+    margin-left: 1;
+    background: #1a3300;
+    color: #88ff44;
+    border: none;
+}
+
 /* Library screen layout */
 #library_layout {
     layout: horizontal;
