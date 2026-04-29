@@ -144,9 +144,9 @@ def scan_download_folder(folder: str | Path) -> list[PipelineGame]:
             if entry != root:
                 god_roots.add(entry.resolve())
             else:
-                # Add the specific TitleID dirs found (not root)
+                # Add the specific TitleID dirs found (not root itself)
                 for g in new_items:
-                    god_roots.add(g.local_path.parent.parent.resolve())
+                    god_roots.add(g.local_path.parent.resolve())
 
     # ── Pass 2: find ISO files not inside a known GOD container ──
     # Group by parent dir so multi-disc detection works.
