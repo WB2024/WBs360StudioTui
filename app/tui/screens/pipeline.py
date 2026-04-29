@@ -1,6 +1,7 @@
 """New Game Processing — pipeline screen.
 
 Stages:
+  0. Extract — detect archives, user picks which to unzip, extract with 7zip
   1. Scan   — find ISOs / GOD containers in torrent download folder
   2. Select — user picks which games to process
   3. Convert — ISO→GOD (skipped if already GOD)
@@ -33,10 +34,15 @@ from app.core.game_tidy import ALL_FORMATS, FORMAT_NAME_SLASH_TITLE_ID
 from app.core.iso2god import Iso2GodError, binary_exists, binary_path, ConversionProgress
 from app.core.library_scanner import load_csv_titles
 from app.core.pipeline import (
+    DiscoveredArchive,
+    ExtractionError,
     GameStatus,
     PipelineGame,
     convert_iso_to_god,
+    extract_archive,
+    find_7zip,
     local_god_rename,
+    scan_archives,
     scan_download_folder,
 )
 from app.core.usb_manager import UsbManager
@@ -119,6 +125,89 @@ class UsbDriveModal(ModalScreen[str | None]):
         self.dismiss(None)
 
 
+# ── Archive selection modal ────────────────────────────────────────────────
+
+class ArchiveSelectModal(ModalScreen[list[DiscoveredArchive] | None]):
+    """Show found archives; user picks which to extract."""
+
+    BINDINGS = [("escape", "cancel", "Cancel")]
+    DEFAULT_CSS = """
+    ArchiveSelectModal { align: center middle; }
+    #arc_box {
+        width: 80; height: auto; max-height: 36;
+        border: thick $primary; background: $surface; padding: 1 2;
+    }
+    #arc_table { height: auto; max-height: 20; }
+    #arc_btns Button { margin-right: 1; }
+    """
+
+    def __init__(self, archives: list[DiscoveredArchive], **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self._archives = archives
+        self._selected: set[int] = set(range(len(archives)))  # all selected by default
+        self._row_keys: dict[int, RowKey] = {}
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="arc_box"):
+            yield Static(
+                f"[b]{len(self._archives)} archive(s) found.[/b]  "
+                "Select which to extract, then click Extract."
+            )
+            yield DataTable(id="arc_table", cursor_type="row")
+            with Horizontal(id="arc_btns"):
+                yield Button("Extract Selected", id="arc_ok", variant="primary")
+                yield Button("Select All", id="arc_all")
+                yield Button("Select None", id="arc_none")
+                yield Button("Skip All", id="arc_cancel")
+
+    def on_mount(self) -> None:
+        dt = self.query_one("#arc_table", DataTable)
+        dt.add_columns("", "Archive", "Type", "Size")
+        self._rebuild()
+
+    def _rebuild(self) -> None:
+        dt = self.query_one("#arc_table", DataTable)
+        dt.clear()
+        self._row_keys.clear()
+        for i, arc in enumerate(self._archives):
+            check = "[green][x][/green]" if i in self._selected else "[ ]"
+            rk = dt.add_row(
+                check,
+                arc.name,
+                arc.ext.lstrip(".").upper(),
+                f"{arc.size_mb:.1f} MB",
+                key=str(i),
+            )
+            self._row_keys[i] = rk
+
+    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
+        if event.row_key is None:
+            return
+        idx = int(str(event.row_key.value))
+        if idx in self._selected:
+            self._selected.discard(idx)
+        else:
+            self._selected.add(idx)
+        self._rebuild()
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        bid = event.button.id
+        if bid == "arc_ok":
+            chosen = [self._archives[i] for i in sorted(self._selected)]
+            self.dismiss(chosen if chosen else [])
+        elif bid == "arc_all":
+            self._selected = set(range(len(self._archives)))
+            self._rebuild()
+        elif bid == "arc_none":
+            self._selected.clear()
+            self._rebuild()
+        elif bid == "arc_cancel":
+            self.dismiss(None)  # skip extraction entirely
+
+    def action_cancel(self) -> None:
+        self.dismiss(None)
+
+
 # ── Main screen ──────────────────────────────────────────────────────────────
 
 class NewGamePipelineScreen(Screen):
@@ -130,13 +219,13 @@ class NewGamePipelineScreen(Screen):
     ]
 
     # Stage labels shown in the header
-    _STAGES = ["Scan", "Select", "Convert", "Tidy", "Transfer"]
+    _STAGES = ["Extract", "Scan", "Select", "Convert", "Tidy", "Transfer"]
 
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self._games: list[PipelineGame] = []
         self._selected: set[int] = set()   # indices into _games
-        self._stage: int = 0               # 0=scan,1=select,2=convert,3=tidy,4=transfer
+        self._stage: int = 0               # 0=extract,1=scan,2=select,3=convert,4=tidy,5=transfer
         self._row_keys: dict[int, RowKey] = {}   # game index → DataTable row key
 
     # ── layout ───────────────────────────────────────────────────────────────
@@ -276,6 +365,10 @@ class NewGamePipelineScreen(Screen):
         self.app.exit()
 
     def action_scan(self) -> None:
+        self.run_worker(self._do_scan(), exclusive=True)
+
+    async def _do_scan(self) -> None:
+        """Worker: check for archives → optionally extract → scan for games."""
         settings = self.app.settings  # type: ignore[attr-defined]
         folder = settings.torrent_download_folder
         if not folder:
@@ -284,7 +377,31 @@ class NewGamePipelineScreen(Screen):
             )
             return
 
+        # ═══ Stage 0: Extract ═════════════════════════════════════════════════
+        self._stage = 0
+        self._update_stage_bar()
+        self._set_status(f"Checking {folder} for archives…")
+
+        archives = scan_archives(folder)
+        if archives:
+            seven_zip = find_7zip()
+            if not seven_zip:
+                self._log(
+                    "[yellow]Archives found but 7zip not installed — skipping extraction.[/yellow]\n"
+                    "Install 7zip (p7zip-full) to enable automatic extraction."
+                )
+            else:
+                chosen: list[DiscoveredArchive] | None = await self.app.push_screen_wait(
+                    ArchiveSelectModal(archives)
+                )
+                if chosen:  # None = skip all, [] = user chose none
+                    await self._extract_archives(chosen, Path(folder), seven_zip)
+
+        # ═══ Stage 1: Scan ════════════════════════════════════════════════════
+        self._stage = 1
+        self._update_stage_bar()
         self._set_status(f"Scanning {folder}…")
+
         self._games = scan_download_folder(folder)
         self._selected = set(range(len(self._games)))  # default: all selected
         self._rebuild_table()
@@ -301,9 +418,32 @@ class NewGamePipelineScreen(Screen):
             )
             self._log("")
 
-        self._stage = 1
+        self._stage = 2
         self._update_stage_bar()
         self._update_proceed()
+
+    async def _extract_archives(
+        self,
+        archives: list[DiscoveredArchive],
+        folder: Path,
+        seven_zip: str,
+    ) -> None:
+        """Extract each chosen archive into the download folder."""
+        for i, arc in enumerate(archives):
+            self._set_status(f"Extracting {i + 1}/{len(archives)}: {arc.name}{arc.ext}…")
+            # Extract into the same download folder so game scanner picks it up
+            try:
+                await extract_archive(
+                    archive=arc,
+                    dest_dir=folder,
+                    seven_zip=seven_zip,
+                    on_line=lambda line: self._log(
+                        f"[cyan]7zip[/cyan] {line[:120]}"
+                    ),
+                )
+                self._log(f"[green]Extracted:[/green] {arc.name}{arc.ext}")
+            except ExtractionError as exc:
+                self._log(f"[red]Extraction failed:[/red] {exc}")
 
     # ── pipeline worker ───────────────────────────────────────────────────────
 
@@ -355,7 +495,7 @@ class NewGamePipelineScreen(Screen):
         total = len(games_to_process)
 
         # ═══ Stage: Convert ═══════════════════════════════════════════════════
-        self._stage = 2
+        self._stage = 3
         self._update_stage_bar()
 
         for idx_in_batch, g in enumerate(games_to_process):
@@ -396,7 +536,7 @@ class NewGamePipelineScreen(Screen):
             self._rebuild_table()
 
         # ═══ Stage: Tidy (local rename) ═══════════════════════════════════════
-        self._stage = 3
+        self._stage = 4
         self._update_stage_bar()
 
         for g in games_to_process:
@@ -426,7 +566,7 @@ class NewGamePipelineScreen(Screen):
         self._rebuild_table()
 
         # ═══ Stage: Transfer ══════════════════════════════════════════════════
-        self._stage = 4
+        self._stage = 5
         self._update_stage_bar()
 
         installer = self.app.installer  # type: ignore[attr-defined]
@@ -512,5 +652,5 @@ class NewGamePipelineScreen(Screen):
         self._set_status(
             f"Done — {done_count}/{len(transferable)} transferred successfully."
         )
-        self._stage = 4  # stay on Transfer stage (all complete)
+        self._stage = 5  # stay on Transfer stage (all complete)
         self._update_stage_bar()

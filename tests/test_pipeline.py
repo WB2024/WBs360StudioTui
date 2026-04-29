@@ -1,4 +1,4 @@
-"""Tests for app.core.pipeline — scan_download_folder and local_god_rename."""
+"""Tests for app.core.pipeline — scan_download_folder, scan_archives, and local_god_rename."""
 from __future__ import annotations
 
 import shutil
@@ -7,11 +7,15 @@ from pathlib import Path
 import pytest
 
 from app.core.pipeline import (
+    ARCHIVE_EXTS,
+    DiscoveredArchive,
     DiscoveredGod,
     DiscoveredIso,
     GameStatus,
     PipelineGame,
     _find_isos_in_dir,
+    find_7zip,
+    scan_archives,
     scan_download_folder,
 )
 
@@ -134,6 +138,83 @@ class TestFindIsosInDir:
         result = _find_isos_in_dir(folder)
         labels = {label for _, label in result}
         assert any("disc" in lab.lower() for lab in labels)
+
+
+        assert any("disc" in lab.lower() for lab in labels)
+
+
+# ── scan_archives ──────────────────────────────────────────────────────────────
+
+class TestScanArchives:
+    def _make_archive(self, path: Path, ext: str = ".zip") -> Path:
+        full = path.parent / (path.name + ext) if not path.suffix else path
+        full.parent.mkdir(parents=True, exist_ok=True)
+        full.write_bytes(b"\x50\x4b\x03\x04")  # ZIP magic bytes
+        return full
+
+    def test_missing_folder_returns_empty(self, tmp_path):
+        assert scan_archives(tmp_path / "nonexistent") == []
+
+    def test_empty_folder_returns_empty(self, tmp_path):
+        assert scan_archives(tmp_path) == []
+
+    def test_zip_in_root(self, tmp_path):
+        self._make_archive(tmp_path / "Game.zip", "")
+        result = scan_archives(tmp_path)
+        assert len(result) == 1
+        assert result[0].ext == ".zip"
+
+    def test_7z_in_root(self, tmp_path):
+        arc = tmp_path / "Game.7z"
+        arc.write_bytes(b"\x37\x7a\xbc\xaf\x27\x1c")
+        result = scan_archives(tmp_path)
+        assert len(result) == 1
+        assert result[0].ext == ".7z"
+
+    def test_rar_in_root(self, tmp_path):
+        arc = tmp_path / "Game.rar"
+        arc.write_bytes(b"\x52\x61\x72\x21")
+        result = scan_archives(tmp_path)
+        assert len(result) == 1
+        assert result[0].ext == ".rar"
+
+    def test_archive_in_subfolder(self, tmp_path):
+        (tmp_path / "SomeGame").mkdir()
+        self._make_archive(tmp_path / "SomeGame" / "Game.zip", "")
+        result = scan_archives(tmp_path)
+        assert len(result) == 1
+        assert result[0].name == "Game"
+
+    def test_iso_not_counted_as_archive(self, tmp_path):
+        (tmp_path / "game.iso").write_bytes(b"\x00" * 16)
+        result = scan_archives(tmp_path)
+        assert result == []
+
+    def test_size_populated(self, tmp_path):
+        arc = tmp_path / "Game.zip"
+        arc.write_bytes(b"\x00" * 1024)
+        result = scan_archives(tmp_path)
+        assert result[0].size_bytes == 1024
+        assert result[0].size_mb == pytest.approx(1024 / (1024 ** 2))
+
+    def test_multiple_archives(self, tmp_path):
+        for name in ["A.zip", "B.7z", "C.rar"]:
+            (tmp_path / name).write_bytes(b"\x00" * 8)
+        result = scan_archives(tmp_path)
+        assert len(result) == 3
+
+    def test_archive_exts_coverage(self):
+        """Sanity check that ARCHIVE_EXTS covers common formats."""
+        for ext in [".zip", ".7z", ".rar", ".tar"]:
+            assert ext in ARCHIVE_EXTS
+
+
+# ── find_7zip ──────────────────────────────────────────────────────────────────
+
+class TestFind7zip:
+    def test_returns_string_or_none(self):
+        result = find_7zip()
+        assert result is None or isinstance(result, str)
 
 
 # ── PipelineGame ──────────────────────────────────────────────────────────────

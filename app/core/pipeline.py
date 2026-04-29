@@ -1,6 +1,8 @@
 """Game processing pipeline — scan, convert, tidy, transfer.
 
 Workflow:
+  0. (Optional) Detect archive files (.zip/.7z/.rar/…) and extract selected
+     ones with 7zip before the game scan.
   1. Scan torrent download folder for ISO files and GOD containers.
   2. For each ISO: convert to GOD via iso2god.
   3. For each GOD (newly converted or already present): apply local folder-name
@@ -13,6 +15,7 @@ folder that contained the ISO.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 import shutil
@@ -27,6 +30,7 @@ from app.models.god_game import GodGameItem
 log = logging.getLogger(__name__)
 
 _ISO_EXT = {".iso"}
+ARCHIVE_EXTS = {".zip", ".7z", ".rar", ".tar", ".gz", ".bz2", ".xz", ".lzma", ".zst"}
 
 
 # ── Status enum ───────────────────────────────────────────────────────────────
@@ -43,6 +47,19 @@ class GameStatus(Enum):
 
 
 # ── Discovery models ──────────────────────────────────────────────────────────
+
+@dataclass
+class DiscoveredArchive:
+    """An archive file found inside the download folder."""
+    name: str           # Filename without extension
+    archive_path: Path  # Absolute path to the archive
+    ext: str            # e.g. ".zip", ".7z"
+    size_bytes: int
+
+    @property
+    def size_mb(self) -> float:
+        return self.size_bytes / (1024 ** 2)
+
 
 @dataclass
 class DiscoveredIso:
@@ -278,3 +295,92 @@ async def convert_iso_to_god(
         )
 
     return items[0]
+
+
+# ── Archive scanning and extraction ───────────────────────────────────────────
+
+_7ZIP_CANDIDATES = ["7z", "7za", "7zz", "7zzs"]
+
+
+def find_7zip() -> str | None:
+    """Return the path to a 7-zip executable, or None if not found."""
+    for candidate in _7ZIP_CANDIDATES:
+        if shutil.which(candidate):
+            return candidate
+    return None
+
+
+def scan_archives(folder: str | Path) -> list[DiscoveredArchive]:
+    """Scan *folder* (1 level deep) for archive files.
+
+    Returns one DiscoveredArchive per archive found at the top level or
+    inside a single-level subfolder. Archives nested deeper are ignored.
+    """
+    root = Path(folder)
+    if not root.is_dir():
+        return []
+
+    archives: list[DiscoveredArchive] = []
+
+    for entry in sorted(root.iterdir()):
+        if entry.is_file() and entry.suffix.lower() in ARCHIVE_EXTS:
+            archives.append(DiscoveredArchive(
+                name=entry.stem,
+                archive_path=entry.resolve(),
+                ext=entry.suffix.lower(),
+                size_bytes=entry.stat().st_size,
+            ))
+        elif entry.is_dir():
+            # Also check one level inside subfolders
+            for sub in sorted(entry.iterdir()):
+                if sub.is_file() and sub.suffix.lower() in ARCHIVE_EXTS:
+                    archives.append(DiscoveredArchive(
+                        name=sub.stem,
+                        archive_path=sub.resolve(),
+                        ext=sub.suffix.lower(),
+                        size_bytes=sub.stat().st_size,
+                    ))
+
+    log.info("Archive scan found %d archive(s) in %s", len(archives), root)
+    return archives
+
+
+class ExtractionError(Exception):
+    """Raised when 7zip extraction fails."""
+
+
+async def extract_archive(
+    archive: DiscoveredArchive,
+    dest_dir: Path,
+    seven_zip: str,
+    on_line: Optional[Callable[[str], None]] = None,
+) -> None:
+    """Extract *archive* into *dest_dir* using 7zip.
+
+    *on_line* is called with each line of 7zip stdout (progress/filenames).
+    Raises ExtractionError if 7zip exits non-zero.
+    """
+    dest_dir.mkdir(parents=True, exist_ok=True)
+
+    cmd = [seven_zip, "x", str(archive.archive_path), f"-o{dest_dir}", "-y"]
+    log.info("Extracting %s → %s", archive.archive_path, dest_dir)
+
+    proc = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.STDOUT,
+    )
+
+    assert proc.stdout is not None
+    async for raw in proc.stdout:
+        line = raw.decode(errors="replace").rstrip()
+        if line and on_line:
+            on_line(line)
+
+    rc = await proc.wait()
+    if rc != 0:
+        raise ExtractionError(
+            f"7zip exited with code {rc} extracting {archive.archive_path.name}"
+        )
+    log.info("Extraction complete: %s", archive.archive_path.name)
+
