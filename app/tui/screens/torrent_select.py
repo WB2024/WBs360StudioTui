@@ -282,8 +282,8 @@ class TorrentSelectScreen(Screen):
         self._refresh_labels(self.query_one("#tsel_tree", Tree).root)
         self._update_status()
 
-    async def action_download(self) -> None:
-        await self._do_download()
+    def action_download(self) -> None:
+        self.run_worker(self._do_download(), exclusive=True)
 
     def action_quit(self) -> None:
         self.app.exit()
