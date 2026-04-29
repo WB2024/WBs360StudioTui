@@ -14,6 +14,7 @@ from app.tui.screens.homebrew import HomebrewScreen
 from app.tui.screens.library import LibraryScreen
 from app.tui.screens.iso2god_screen import Iso2GodScreen
 from app.tui.screens.ftp_browser import FtpBrowserScreen
+from app.tui.screens.pipeline import NewGamePipelineScreen
 from app.tui.screens.settings import SettingsScreen
 from app.tui.screens.trainers import TrainersScreen
 from app.tui.screens.transfer_games import TransferGamesScreen
@@ -43,6 +44,7 @@ class MainMenuScreen(Screen):
                 yield Button("Transfer Games", id="m_tg", classes="menu_button", variant="warning")
                 yield Button("ISO → GOD", id="m_iso", classes="menu_button", variant="warning")
                 yield Button("Game Torrents", id="m_tor", classes="menu_button", variant="warning")
+                yield Button("New Game Processing", id="m_pip", classes="menu_button", variant="warning")
                 yield Button("FTP File Browser", id="m_ftp", classes="menu_button", variant="warning")
                 yield Button("Utilities", id="m_utils", classes="menu_button")
                 yield Button("Settings", id="m_set", classes="menu_button")
@@ -81,6 +83,7 @@ class MainMenuScreen(Screen):
             "m_tg": TransferGamesScreen,
             "m_iso": Iso2GodScreen,
             "m_tor": TorrentPickerScreen,
+            "m_pip": NewGamePipelineScreen,
             "m_ftp": FtpBrowserScreen,
             "m_utils": UtilitiesScreen,
             "m_set": SettingsScreen,

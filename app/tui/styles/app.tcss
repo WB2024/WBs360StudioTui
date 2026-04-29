@@ -379,3 +379,61 @@ ConfirmTidyModal {
 #tsel_search {
     margin: 0 1;
 }
+
+/* New Game Processing pipeline screen */
+
+#pip_stage_bar {
+    height: 3;
+    padding: 0 1;
+}
+
+.pip_stage {
+    width: 1fr;
+    text-align: center;
+    background: $surface;
+    border: solid $panel;
+    padding: 0 1;
+    color: $text-muted;
+}
+
+.pip_stage_active {
+    background: $primary;
+    color: $text;
+    border: solid $primary-lighten-2;
+}
+
+.pip_stage_done {
+    background: $success-darken-3;
+    color: $success;
+    border: solid $success-darken-1;
+}
+
+#pip_info {
+    height: auto;
+    padding: 0 1;
+    color: $text-muted;
+}
+
+#pip_actions {
+    height: auto;
+    padding: 0 1;
+}
+
+#pip_actions Button {
+    margin-right: 1;
+}
+
+#pip_table {
+    height: 1fr;
+}
+
+#pip_log {
+    height: auto;
+    min-height: 2;
+    max-height: 6;
+    padding: 0 2;
+    background: #0d1a2e;
+    border: solid #1a3a5a;
+    margin: 0 0 1 0;
+}
+
