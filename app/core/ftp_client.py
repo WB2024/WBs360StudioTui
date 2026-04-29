@@ -105,6 +105,15 @@ class FtpClient:
         except Exception:
             pass  # Already exists or not supported — safe to ignore
 
+    async def make_directory(self, ftp_path: str) -> None:
+        """Create a directory on the FTP server using its absolute FTP path.
+
+        No-op if the directory already exists.
+        """
+        if not self._client:
+            raise FtpConnectionError("Not connected")
+        await self._mkd(ftp_path)
+
     async def ensure_directory(self, remote_path: str) -> None:
         if not self._client:
             raise FtpConnectionError("Not connected")
