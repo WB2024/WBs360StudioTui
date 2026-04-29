@@ -244,7 +244,7 @@ class FtpBrowserScreen(Screen):
     def _join(self, name: str) -> str:
         return self._path.rstrip("/") + "/" + name
 
-    def _parent(self) -> str:
+    def _parent_path(self) -> str:
         parts = self._path.rstrip("/").rsplit("/", 1)
         return parts[0] if parts[0] else "/"
 
@@ -288,7 +288,7 @@ class FtpBrowserScreen(Screen):
     async def action_go_up(self) -> None:
         if self._path == "/":
             return
-        await self._list_path(self._parent())
+        await self._list_path(self._parent_path())
 
     async def action_refresh(self) -> None:
         await self._list_path(self._path)
