@@ -46,4 +46,7 @@ desktop.ini
 # Downloaded/cached content (not committed)
 *.part
 
+# Torrent files (user-supplied, not committed)
+*.torrent
+
 torrent-selector-spec_Version2.md
