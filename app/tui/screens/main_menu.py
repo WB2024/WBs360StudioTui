@@ -13,6 +13,7 @@ from app.tui.screens.game_saves import GameSavesScreen
 from app.tui.screens.homebrew import HomebrewScreen
 from app.tui.screens.library import LibraryScreen
 from app.tui.screens.iso2god_screen import Iso2GodScreen
+from app.tui.screens.ftp_browser import FtpBrowserScreen
 from app.tui.screens.settings import SettingsScreen
 from app.tui.screens.trainers import TrainersScreen
 from app.tui.screens.transfer_games import TransferGamesScreen
@@ -39,6 +40,7 @@ class MainMenuScreen(Screen):
                 yield Button("Game Patches", id="m_gp", classes="menu_button")
                 yield Button("Transfer Games", id="m_tg", classes="menu_button", variant="warning")
                 yield Button("ISO → GOD", id="m_iso", classes="menu_button", variant="warning")
+                yield Button("FTP File Browser", id="m_ftp", classes="menu_button", variant="warning")
                 yield Button("Settings", id="m_set", classes="menu_button")
                 yield Button("Quit", id="m_quit", classes="menu_button", variant="error")
         yield Footer()
@@ -74,6 +76,7 @@ class MainMenuScreen(Screen):
             "m_gp": GamePatchesScreen,
             "m_tg": TransferGamesScreen,
             "m_iso": Iso2GodScreen,
+            "m_ftp": FtpBrowserScreen,
             "m_set": SettingsScreen,
         }
         cls = m.get(event.button.id)

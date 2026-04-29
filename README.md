@@ -319,7 +319,7 @@ Then open **My Library → Scan Library** and all your installed games appear by
 ### Near-term
 - [ ] **Bulk install** — queue multiple items and install in one go
 - [ ] **Install history** — log of what was installed, when, and where
-- [ ] **FTP file browser** — navigate your console's filesystem directly from the TUI
+- [x] **FTP file browser** — navigate your console's filesystem directly from the TUI
 - [ ] **Library auto-scan on connect** — scan automatically when FTP connection is established
 
 ### Medium-term

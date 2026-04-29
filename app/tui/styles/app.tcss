@@ -255,3 +255,89 @@ SplashScreen > Vertical {
     color: #888888;
     margin-top: 1;
 }
+
+/* FTP File Browser */
+
+#fb_path_bar {
+    height: 1;
+    background: #0d1a2e;
+    color: #00d4ff;
+    padding: 0 1;
+}
+
+#fb_toolbar {
+    height: auto;
+    padding: 1;
+    background: #111111;
+}
+
+#fb_toolbar Button {
+    width: auto;
+    margin-right: 1;
+}
+
+ConfirmDeleteModal {
+    align: center middle;
+}
+
+#confirm_box {
+    width: 60;
+    height: auto;
+    border: round #ff4444;
+    background: #1a1a2e;
+    padding: 2 3;
+}
+
+#confirm_title {
+    margin-bottom: 1;
+}
+
+#confirm_name {
+    color: #ffffff;
+    margin-bottom: 1;
+}
+
+#confirm_warn {
+    margin-bottom: 1;
+}
+
+#confirm_msg {
+    color: #888888;
+    margin-bottom: 2;
+}
+
+#confirm_btns {
+    height: 3;
+}
+
+#confirm_btns Button {
+    margin-right: 1;
+}
+
+RenameModal {
+    align: center middle;
+}
+
+#rename_box {
+    width: 60;
+    height: auto;
+    border: round #00d4ff;
+    background: #1a1a2e;
+    padding: 2 3;
+}
+
+#rename_title {
+    margin-bottom: 1;
+}
+
+#rename_input {
+    margin-bottom: 2;
+}
+
+#rename_btns {
+    height: 3;
+}
+
+#rename_btns Button {
+    margin-right: 1;
+}

@@ -174,3 +174,81 @@ class FtpClient:
         except aioftp.AIOFTPException as e:
             raise FtpTransferError(f"List failed for {norm}: {e}") from e
         return names
+
+    async def list_detail(self, remote_path: str) -> list[tuple[str, bool, int, str]]:
+        """List directory contents with metadata.
+
+        Returns a list of (name, is_dir, size_bytes, modified_str) tuples.
+        modified_str is in YYYYMMDDHHMMSS format when available, else "".
+
+        Aurora's FtpDll ignores path arguments to LIST and doesn't support MLSD.
+        We CWD to the target path first, then LIST with no argument and raw_command="LIST".
+        """
+        if not self._client:
+            raise FtpConnectionError("Not connected")
+        results: list[tuple[str, bool, int, str]] = []
+        try:
+            async with asyncio.timeout(self.SOCKET_TIMEOUT):
+                await self._client.change_directory(remote_path)
+                async for ftp_path, info in self._client.list(raw_command="LIST"):
+                    name = ftp_path.name
+                    if not name or name in (".", ".."):
+                        continue
+                    is_dir = info.get("type", "file").lower() in ("dir", "cdir", "pdir")
+                    try:
+                        size = int(info.get("size", 0) or 0)
+                    except (ValueError, TypeError):
+                        size = 0
+                    modified = str(info.get("modify", "") or "")
+                    results.append((name, is_dir, size, modified))
+        except asyncio.TimeoutError as e:
+            raise FtpTransferError(f"Directory listing timed out for {remote_path}") from e
+        except aioftp.AIOFTPException as e:
+            raise FtpTransferError(f"Directory listing failed for {remote_path}: {e}") from e
+        return results
+
+    async def delete_file(self, remote_path: str) -> None:
+        """Delete a file on the remote server (DELE)."""
+        if not self._client:
+            raise FtpConnectionError("Not connected")
+        try:
+            await asyncio.wait_for(
+                self._client.command(f"DELE {remote_path}", expected_codes=("2xx",)),
+                timeout=self.OP_TIMEOUT,
+            )
+        except asyncio.TimeoutError as e:
+            raise FtpTransferError(f"Delete timed out: {remote_path}") from e
+        except aioftp.AIOFTPException as e:
+            raise FtpTransferError(f"Delete failed for {remote_path}: {e}") from e
+
+    async def remove_directory(self, remote_path: str) -> None:
+        """Remove a directory on the remote server (RMD). Must be empty."""
+        if not self._client:
+            raise FtpConnectionError("Not connected")
+        try:
+            await asyncio.wait_for(
+                self._client.command(f"RMD {remote_path}", expected_codes=("2xx",)),
+                timeout=self.OP_TIMEOUT,
+            )
+        except asyncio.TimeoutError as e:
+            raise FtpTransferError(f"Remove directory timed out: {remote_path}") from e
+        except aioftp.AIOFTPException as e:
+            raise FtpTransferError(f"Remove directory failed for {remote_path}: {e}") from e
+
+    async def rename(self, old_path: str, new_path: str) -> None:
+        """Rename/move a file or directory (RNFR + RNTO)."""
+        if not self._client:
+            raise FtpConnectionError("Not connected")
+        try:
+            await asyncio.wait_for(
+                self._client.command(f"RNFR {old_path}", expected_codes=("3xx",)),
+                timeout=self.OP_TIMEOUT,
+            )
+            await asyncio.wait_for(
+                self._client.command(f"RNTO {new_path}", expected_codes=("2xx",)),
+                timeout=self.OP_TIMEOUT,
+            )
+        except asyncio.TimeoutError as e:
+            raise FtpTransferError("Rename timed out") from e
+        except aioftp.AIOFTPException as e:
+            raise FtpTransferError(f"Rename failed: {e}") from e
