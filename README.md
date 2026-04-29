@@ -160,6 +160,29 @@ It pulls live data from the Arisen Studio public database — thousands of mods,
 - Live progress bar showing current part, total parts, and detected Title ID / game name
 - Output goes directly to your configured **Local GOD Path**, ready to transfer via Transfer Games
 
+### 📁 Local Content (Offline Sources)
+Alongside the Arisen Studio online database, x360tm supports **local content folders** bundled directly in the repo. These are scanned at startup and merged seamlessly with the online data — no internet required for local items.
+
+| Folder | Content | Naming convention |
+|--------|---------|-------------------|
+| `LocalTrainers/` | Aurora `.xex` trainers | `{TitleID}/{TrainerFile}.xex` |
+| `LocalMods/` | Game mods | `{TitleID}/{filename}` |
+| `LocalHomebrew/` | Homebrew apps | `{AppName}/{filename}` |
+| `LocalGameSaves/` | Pre-made save files | `{TitleID}/{filename}` |
+
+**The repo ships with 550+ trainers** in `LocalTrainers/` — one subfolder per Title ID, each containing an Aurora-compatible `.xex` trainer file (RETROBYTE format).
+
+**Metadata**: Drop a `mod.json`, `meta.json`, or `info.json` file inside any content folder to provide name, author, version, and description. Without it, the folder/file name is used as a fallback.
+
+**In the UI**: Local items are merged with online results in every browser. Trainers sourced from local files show a `[L]` suffix in the trainer list. The detail pane shows `Source: Local` and the full local file path instead of a download URL. Install works identically — the local file is pushed directly over FTP or USB.
+
+**Install paths** used for local content:
+- Trainers → `{AURORAPATH}\User\Trainers\{TitleID}\{TrainerStem}\{filename}`
+- Mods → `Hdd:\JTAG\{TitleID}\`
+- Game Saves → `Hdd:\Content\0000000000000000\{TitleID}\000B0000\`
+
+> **Note on empty folders**: Git does not track empty directories. After cloning, `LocalMods/`, `LocalHomebrew/`, and `LocalGameSaves/` will not appear until files are added. The app handles missing folders gracefully — they are simply skipped. Drop your own files in and they'll be picked up on next launch.
+
 ### ⚙️ Settings
 - **Connection Profiles** — add, edit, delete, set default FTP connections
 - **FTP Test / Reconnect / Disconnect** — inline connection health check with live status
@@ -250,6 +273,10 @@ pyinstaller --onefile --name x360tm main.py
 | Cache | `platformdirs.user_cache_dir("x360tm")/` |
 | Library | `platformdirs.user_cache_dir("x360tm")/library.json` |
 | Logs | `platformdirs.user_log_dir("x360tm")/x360tm.log` |
+| Local Trainers | `LocalTrainers/` (repo root — 550+ trainers shipped) |
+| Local Mods | `LocalMods/` (repo root — add your own) |
+| Local Homebrew | `LocalHomebrew/` (repo root — add your own) |
+| Local Saves | `LocalGameSaves/` (repo root — add your own) |
 
 ---
 
@@ -310,6 +337,7 @@ Then open **My Library → Scan Library** and all your installed games appear by
 - **Aurora FTP compatibility** — the FTP client uses raw `LIST`/`MKD` commands, avoiding unsupported `MLST`/`MLSD`/`EPSV` that Aurora's FtpDll rejects.
 - **Drive mapping**: Aurora exposes drives as root directories (`Hdd1`, `Usb0`, `Usb1`, `Game`). x360tm maps Xbox-style paths automatically.
 - **`ConnectionResetError` on disconnect** is a cosmetic Windows asyncio quirk when Aurora closes the socket — it does not affect transfers.
+- **Local content folders** (`LocalMods/`, `LocalHomebrew/`, `LocalGameSaves/`) are empty by default and will not appear after a fresh clone — Git does not track empty directories. This is expected. Add files to them and they'll be picked up automatically.
 
 ---
 
