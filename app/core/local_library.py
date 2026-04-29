@@ -55,7 +55,7 @@ def load_local_trainers() -> list[TrainerGameItem]:
         title_id = tid_dir.name.upper()
         trainers: list[TrainerItem] = []
         for f in sorted(tid_dir.iterdir()):
-            if not f.is_file():
+            if not f.is_file() or f.name == ".gitkeep":
                 continue
             stem = f.stem  # e.g. "Trainer(RETROBYTE)"
             install_path = _trainer_install_path(title_id, stem, f.name)
@@ -98,7 +98,7 @@ def _read_json_meta(directory: Path, default_name: str) -> dict:
 
 def _mod_files_from_dir(directory: Path, title_id: str) -> list[DownloadFile]:
     """Collect non-metadata files in a directory as DownloadFile objects."""
-    skip = {"mod.json", "meta.json", "info.json"}
+    skip = {"mod.json", "meta.json", "info.json", ".gitkeep"}
     files = []
     for f in sorted(directory.iterdir()):
         if f.is_file() and f.name.lower() not in skip:
@@ -189,7 +189,7 @@ def load_local_game_saves() -> list[GameSaveItemData]:
             continue
         title_id = tid_dir.name.upper()
         meta = _read_json_meta(tid_dir, title_id)
-        skip = {"mod.json", "meta.json", "info.json"}
+        skip = {"mod.json", "meta.json", "info.json", ".gitkeep"}
         dl_files = []
         for f in sorted(tid_dir.iterdir()):
             if f.is_file() and f.name.lower() not in skip:
