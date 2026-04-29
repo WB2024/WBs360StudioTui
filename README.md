@@ -189,7 +189,15 @@ It pulls live data from the Arisen Studio public database — thousands of mods,
 - **Confirmation modal** summarises exactly how many folders will move, are already correct, or will be skipped
 - Applies changes over FTP using `RNFR`/`RNTO` (rename) — no files are copied or deleted
 - Cleans up empty parent folders after moves
-
+### 📦 Game Torrents (Selective Download)
+- Drop `.torrent` files for **legally-owned Xbox 360 game backups** into the bundled `Torrent/` folder at the repo root
+- The **Game Torrents** screen lists every `.torrent` file with name, file count, and total size
+- Open one and you get a **navigable folder/file tree** — every file in the torrent, organised exactly as it'll appear on disk
+- **Toggle individual files or whole folders** with `Space` (folder selection cascades to children); `[x]`/`[~]`/`[ ]` checkboxes show full / partial / none state at a glance
+- Press `A` to select all, `N` to select none, `D` to download
+- Hands the selection off to a running **qBittorrent** instance via its Web API: adds the torrent paused, sets every file's priority to `0` (skip), then sets your selection to `1` (normal), then resumes — mirrors the GUI client's "select files to download" dialog exactly
+- Files save to your configured **Torrent Download Folder** (Settings); falls back to qBittorrent's own default if unset
+- Powered by [`torf`](https://github.com/rndusr/torf) for `.torrent` decoding and [`qbittorrent-api`](https://github.com/rmartin16/qbittorrent-api) for the client wrapper
 ### �📁 Local Content (Offline Sources)
 Alongside the Arisen Studio online database, x360tm supports **local content folders** bundled directly in the repo. These are scanned at startup and merged seamlessly with the online data — no internet required for local items.
 
@@ -290,9 +298,11 @@ pyinstaller --onefile --name x360tm main.py
 | `C` | Convert selected ISO to GOD (ISO → GOD screen) |
 | `R` | Refresh table |
 | `S` | Scan library (My Library screen) |
-| `A` | Analyse games directory (Game Tidy-up screen) |
+| `A` | Analyse games directory (Game Tidy-up) / Select All (Torrent Selector) |
+| `N` | Rename selected item (FTP File Browser) / Select None (Torrent Selector) |
+| `Space` | Toggle file/folder selection (Torrent Selector) |
+| `D` | Download selected item / Download torrent (Torrent Selector) |
 | `U` / `Backspace` | Go up one directory (FTP File Browser) |
-| `N` | Rename selected item (FTP File Browser) |
 | `Del` | Delete selected item (FTP File Browser) |
 | `Esc` | Go back |
 | `Q` | Quit |
@@ -311,6 +321,7 @@ pyinstaller --onefile --name x360tm main.py
 | Local Mods | `LocalMods/` (repo root — add your own) |
 | Local Homebrew | `LocalHomebrew/` (repo root — add your own) |
 | Local Saves | `LocalGameSaves/` (repo root — add your own) |
+| Torrent files | `Torrent/` (repo root — drop `.torrent` files for legally-owned games) |
 
 ---
 
@@ -349,6 +360,7 @@ Then open **My Library → Scan Library** and all your installed games appear by
 - [ ] **Install history** — log of what was installed, when, and where
 - [x] **FTP file browser** — navigate your console's filesystem directly from the TUI
 - [x] **Game Directory Tidy-up** — reorganise your games folder into a consistent structure over FTP
+- [x] **Game Torrents (selective download)** — pick files from a `.torrent` and hand them off to qBittorrent
 - [ ] **Library auto-scan on connect** — scan automatically when FTP connection is established
 
 ### Medium-term

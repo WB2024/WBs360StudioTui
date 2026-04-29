@@ -65,6 +65,11 @@ class Settings:
     local_god_path: str = ""
     game_install_path: str = "Hdd:\\Content\\0000000000000000\\"
     local_iso_path: str = ""
+    torrent_download_folder: str = ""
+    qbit_host: str = "localhost"
+    qbit_port: int = 8080
+    qbit_username: str = "admin"
+    qbit_password: str = "adminadmin"
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -81,6 +86,11 @@ class Settings:
             "local_god_path": self.local_god_path,
             "game_install_path": self.game_install_path,
             "local_iso_path": self.local_iso_path,
+            "torrent_download_folder": self.torrent_download_folder,
+            "qbit_host": self.qbit_host,
+            "qbit_port": self.qbit_port,
+            "qbit_username": self.qbit_username,
+            "qbit_password": self.qbit_password,
         }
 
     @classmethod
@@ -103,6 +113,11 @@ class Settings:
             local_god_path=d.get("local_god_path", ""),
             game_install_path=d.get("game_install_path", "Hdd:\\Content\\0000000000000000\\"),
             local_iso_path=d.get("local_iso_path", ""),
+            torrent_download_folder=d.get("torrent_download_folder", ""),
+            qbit_host=d.get("qbit_host", "localhost"),
+            qbit_port=int(d.get("qbit_port", 8080)),
+            qbit_username=d.get("qbit_username", "admin"),
+            qbit_password=d.get("qbit_password", "adminadmin"),
         )
 
     # --- Profile mgmt ---

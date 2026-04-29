@@ -94,6 +94,27 @@ class SettingsScreen(Screen):
                 placeholder="e.g. Hdd:\\Content\\0000000000000000\\",
                 id="game_install_path",
             )
+            yield Static("\n[b cyan]Torrent Download Folder[/]")
+            yield Static(
+                "[dim]Local PC folder where qBittorrent will save downloaded torrents.\n"
+                "Used for legally-owned Xbox 360 game backup torrents only.[/]"
+            )
+            yield Input(
+                value=self.app.settings.torrent_download_folder,
+                placeholder="e.g. D:\\Xbox360\\Torrents",
+                id="torrent_download_folder",
+            )
+            yield Static("\n[b cyan]qBittorrent Connection[/]")
+            yield Static("[dim]Host, port, and credentials for the qBittorrent Web UI.[/]")
+            yield Input(value=self.app.settings.qbit_host, placeholder="localhost", id="qbit_host")
+            yield Input(value=str(self.app.settings.qbit_port), placeholder="8080", id="qbit_port")
+            yield Input(value=self.app.settings.qbit_username, placeholder="admin", id="qbit_username")
+            yield Input(
+                value=self.app.settings.qbit_password,
+                placeholder="adminadmin",
+                id="qbit_password",
+                password=True,
+            )
             with Horizontal():
                 yield Button("Save", id="save_settings", variant="success")
                 yield Button("Back", id="back")
@@ -197,6 +218,14 @@ class SettingsScreen(Screen):
             app.settings.local_god_path = self.query_one("#local_god_path", Input).value.strip()
             app.settings.game_install_path = self.query_one("#game_install_path", Input).value.strip() or "Hdd:\\Content\\0000000000000000\\"
             app.settings.local_iso_path = self.query_one("#local_iso_path", Input).value.strip()
+            app.settings.torrent_download_folder = self.query_one("#torrent_download_folder", Input).value.strip()
+            app.settings.qbit_host = self.query_one("#qbit_host", Input).value.strip() or "localhost"
+            try:
+                app.settings.qbit_port = int(self.query_one("#qbit_port", Input).value or "8080")
+            except ValueError:
+                app.settings.qbit_port = 8080
+            app.settings.qbit_username = self.query_one("#qbit_username", Input).value.strip() or "admin"
+            app.settings.qbit_password = self.query_one("#qbit_password", Input).value or "adminadmin"
             save_settings(app.settings)
         elif bid == "refresh_db":
             self.run_worker(self._refresh_db_worker(), exclusive=True)

@@ -17,6 +17,7 @@ from app.tui.screens.ftp_browser import FtpBrowserScreen
 from app.tui.screens.settings import SettingsScreen
 from app.tui.screens.trainers import TrainersScreen
 from app.tui.screens.transfer_games import TransferGamesScreen
+from app.tui.screens.torrent_picker import TorrentPickerScreen
 from app.tui.screens.utilities import UtilitiesScreen
 from app.tui.widgets.connection_bar import ConnectionBar
 
@@ -41,6 +42,7 @@ class MainMenuScreen(Screen):
                 yield Button("Game Patches", id="m_gp", classes="menu_button")
                 yield Button("Transfer Games", id="m_tg", classes="menu_button", variant="warning")
                 yield Button("ISO → GOD", id="m_iso", classes="menu_button", variant="warning")
+                yield Button("Game Torrents", id="m_tor", classes="menu_button", variant="warning")
                 yield Button("FTP File Browser", id="m_ftp", classes="menu_button", variant="warning")
                 yield Button("Utilities", id="m_utils", classes="menu_button")
                 yield Button("Settings", id="m_set", classes="menu_button")
@@ -78,6 +80,7 @@ class MainMenuScreen(Screen):
             "m_gp": GamePatchesScreen,
             "m_tg": TransferGamesScreen,
             "m_iso": Iso2GodScreen,
+            "m_tor": TorrentPickerScreen,
             "m_ftp": FtpBrowserScreen,
             "m_utils": UtilitiesScreen,
             "m_set": SettingsScreen,

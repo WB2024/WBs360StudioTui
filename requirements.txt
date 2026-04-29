@@ -4,3 +4,5 @@ aioftp>=0.21.0
 psutil>=5.9.0
 platformdirs>=4.1.0
 rich>=13.7.0
+torf>=4.2.0
+qbittorrent-api>=2024.1.0
