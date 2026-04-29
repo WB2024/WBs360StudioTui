@@ -124,14 +124,29 @@ def scan_download_folder(folder: str | Path) -> list[PipelineGame]:
 
     # ── Pass 1: find GOD containers (directories with a TitleID sub-folder) ──
     # Walk all directories looking for the TitleID pattern.
-    for entry in sorted(root.rglob("*")):
-        if not entry.is_dir():
-            continue
+    # We also include root itself so that TitleID folders extracted directly
+    # into root (with no parent game folder) are detected.
+    all_dirs = [root] + sorted(e for e in root.rglob("*") if e.is_dir())
+    seen_god_items: set[Path] = set()  # deduplicate across root + rglob passes
+    for entry in all_dirs:
         god_items = _try_scan_god_dir(entry)
         if god_items:
-            for g in god_items:
-                games.append(PipelineGame(name=entry.name, god=g))
-            god_roots.add(entry.resolve())
+            new_items = [g for g in god_items if g.local_path not in seen_god_items]
+            if not new_items:
+                continue
+            for g in new_items:
+                seen_god_items.add(g.local_path)
+                # For root-level scans use TitleID as name (no parent folder available)
+                name = entry.name if entry != root else g.title_id
+                games.append(PipelineGame(name=name, god=g))
+            # Only add entry to god_roots if it's not root itself; adding root
+            # would cause all ISOs in the tree to be skipped in Pass 2.
+            if entry != root:
+                god_roots.add(entry.resolve())
+            else:
+                # Add the specific TitleID dirs found (not root)
+                for g in new_items:
+                    god_roots.add(g.local_path.parent.parent.resolve())
 
     # ── Pass 2: find ISO files not inside a known GOD container ──
     # Group by parent dir so multi-disc detection works.

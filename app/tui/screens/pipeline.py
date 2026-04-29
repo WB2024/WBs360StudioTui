@@ -386,6 +386,7 @@ class NewGamePipelineScreen(Screen):
         if archives:
             seven_zip = find_7zip()
             if not seven_zip:
+                extracted_ok: list[DiscoveredArchive] = []
                 self._log(
                     "[yellow]Archives found but 7zip not installed — skipping extraction.[/yellow]\n"
                     "Install 7zip (p7zip-full) to enable automatic extraction."
@@ -395,7 +396,11 @@ class NewGamePipelineScreen(Screen):
                     ArchiveSelectModal(archives)
                 )
                 if chosen:  # None = skip all, [] = user chose none
-                    await self._extract_archives(chosen, Path(folder), seven_zip)
+                    extracted_ok = await self._extract_archives(chosen, Path(folder), seven_zip)
+                else:
+                    extracted_ok: list[DiscoveredArchive] = []
+        else:
+            extracted_ok: list[DiscoveredArchive] = []
 
         # ═══ Stage 1: Scan ════════════════════════════════════════════════════
         self._stage = 1
@@ -407,8 +412,20 @@ class NewGamePipelineScreen(Screen):
         self._rebuild_table()
 
         if not self._games:
+            if extracted_ok:
+                names = ", ".join(a.name for a in extracted_ok[:3])
+                if len(extracted_ok) > 3:
+                    names += f" (+{len(extracted_ok) - 3} more)"
+                self._log(
+                    f"[yellow]No ISO or GOD games found after extraction.[/yellow]\n"
+                    f"Extracted: [cyan]{names}[/cyan]\n"
+                    "The archive may contain content in a format not yet supported "
+                    "(e.g. raw XBLA / STFS packages). "
+                    "Check the extracted files in your download folder."
+                )
+            else:
+                self._log("")
             self._set_status(f"No games found in {folder}.")
-            self._log("")
         else:
             isos = sum(1 for g in self._games if g.iso)
             gods = sum(1 for g in self._games if g.god)
@@ -427,8 +444,12 @@ class NewGamePipelineScreen(Screen):
         archives: list[DiscoveredArchive],
         folder: Path,
         seven_zip: str,
-    ) -> None:
-        """Extract each chosen archive into the download folder."""
+    ) -> list[DiscoveredArchive]:
+        """Extract each chosen archive into the download folder.
+
+        Returns the list of archives that were successfully extracted.
+        """
+        extracted_ok: list[DiscoveredArchive] = []
         for i, arc in enumerate(archives):
             self._set_status(f"Extracting {i + 1}/{len(archives)}: {arc.name}{arc.ext}…")
             # Extract into the same download folder so game scanner picks it up
@@ -441,9 +462,11 @@ class NewGamePipelineScreen(Screen):
                         f"[cyan]7zip[/cyan] {line[:120]}"
                     ),
                 )
-                self._log(f"[green]Extracted:[/green] {arc.name}{arc.ext}")
+                self._log(f"[green]✓ Extracted:[/green] {arc.name}{arc.ext}")
+                extracted_ok.append(arc)
             except ExtractionError as exc:
-                self._log(f"[red]Extraction failed:[/red] {exc}")
+                self._log(f"[red]✗ Extraction failed:[/red] {exc}")
+        return extracted_ok
 
     # ── pipeline worker ───────────────────────────────────────────────────────
 
