@@ -166,7 +166,31 @@ It pulls live data from the Arisen Studio public database — thousands of mods,
 - Live progress bar showing current part, total parts, and detected Title ID / game name
 - Output goes directly to your configured **Local GOD Path**, ready to transfer via Transfer Games
 
-### 📁 Local Content (Offline Sources)
+### � FTP File Browser
+- Navigate your Xbox 360's entire filesystem directly from the TUI
+- Full directory listing using Aurora-compatible `LIST` commands (no MLSD/MLST required)
+- Rename and delete files or directories in-place
+- Keyboard shortcuts: `Backspace` / `U` to go up, `R` to refresh, `N` to rename, `Del` to delete
+- Useful for inspecting installed content, tidying up folders, or verifying installs
+
+### 🔧 Utilities — Game Directory Tidy-up
+- Accessible via the **Utilities** button on the main menu
+- Scans your configured **game install path** over FTP and analyses the folder structure of every game
+- Looks up friendly game names from the bundled **4,047-title CSV** (no internet needed)
+- **Fuzzy-matches** folder names for games stored without a Title ID subfolder (e.g. after manual copies) using `difflib` with a 55% confidence threshold
+- Detects the **current structure** of each game (bare TitleID, Name/TitleID, other) and classifies each entry as: `CSV` (exact match), `Fuzzy XX%` (fuzzy match), `Dir` (inferred from directory structure), or `Unknown` (skipped)
+- Choose your preferred **target format** from four options:
+  - `TitleID` — e.g. `545408A7/`
+  - `Name/TitleID` *(default)* — e.g. `GTA V/545408A7/`
+  - `Name - TitleID` — e.g. `GTA V - 545408A7/`
+  - `TitleID - Name` — e.g. `545408A7 - GTA V/`
+- **Preview table** shows every game's planned action before anything is changed
+- Switch format at any time — the plan rebuilds instantly without re-scanning
+- **Confirmation modal** summarises exactly how many folders will move, are already correct, or will be skipped
+- Applies changes over FTP using `RNFR`/`RNTO` (rename) — no files are copied or deleted
+- Cleans up empty parent folders after moves
+
+### �📁 Local Content (Offline Sources)
 Alongside the Arisen Studio online database, x360tm supports **local content folders** bundled directly in the repo. These are scanned at startup and merged seamlessly with the online data — no internet required for local items.
 
 | Folder | Content | Naming convention |
@@ -266,6 +290,10 @@ pyinstaller --onefile --name x360tm main.py
 | `C` | Convert selected ISO to GOD (ISO → GOD screen) |
 | `R` | Refresh table |
 | `S` | Scan library (My Library screen) |
+| `A` | Analyse games directory (Game Tidy-up screen) |
+| `U` / `Backspace` | Go up one directory (FTP File Browser) |
+| `N` | Rename selected item (FTP File Browser) |
+| `Del` | Delete selected item (FTP File Browser) |
 | `Esc` | Go back |
 | `Q` | Quit |
 
@@ -320,6 +348,7 @@ Then open **My Library → Scan Library** and all your installed games appear by
 - [ ] **Bulk install** — queue multiple items and install in one go
 - [ ] **Install history** — log of what was installed, when, and where
 - [x] **FTP file browser** — navigate your console's filesystem directly from the TUI
+- [x] **Game Directory Tidy-up** — reorganise your games folder into a consistent structure over FTP
 - [ ] **Library auto-scan on connect** — scan automatically when FTP connection is established
 
 ### Medium-term
