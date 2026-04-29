@@ -1,4 +1,4 @@
-"""Torrent file selector — choose which files to download, then submit to qBittorrent."""
+"""Torrent file selector — tree view with optional filter, submit to qBittorrent."""
 from __future__ import annotations
 
 import asyncio
@@ -8,7 +8,7 @@ from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen, Screen
-from textual.widgets import Button, Footer, Header, Static, Tree
+from textual.widgets import Button, Footer, Header, Input, Static, Tree
 from textual.widgets.tree import TreeNode
 
 from app.core.qbit_client import QbitAddError, QbitClient, QbitConfig, QbitConnectionError
@@ -54,16 +54,26 @@ class ConfirmDownloadModal(ModalScreen[bool]):
         self.dismiss(False)
 
 
+# ── Helper ──────────────────────────────────────────────────────────────────
+
+def _node_matches_filter(node: TorrentTreeNode, query: str) -> bool:
+    """True if *node* or any descendant's name contains *query* (case-insensitive)."""
+    if query.lower() in node.name.lower():
+        return True
+    return any(_node_matches_filter(child, query) for child in node.children.values())
+
+
 # ── Main selector screen ───────────────────────────────────────────────────
 
 class TorrentSelectScreen(Screen):
     TITLE = "Select Files to Download"
     BINDINGS = [
-        Binding("escape", "back", "Back", show=True),
+        Binding("escape", "escape_action", "Back", show=True),
         Binding("space", "toggle", "Toggle", show=True),
         Binding("a", "select_all", "All", show=True),
         Binding("n", "select_none", "None", show=True),
         Binding("d", "download", "Download", show=True),
+        Binding("s", "focus_search", "Search", show=True, priority=True),
         Binding("q", "quit", "Quit", show=True),
     ]
 
@@ -71,10 +81,11 @@ class TorrentSelectScreen(Screen):
         super().__init__(**kwargs)
         self._torrent = torrent
         self._selection = SelectionManager.from_tree(torrent.tree, default_select_all=True)
-        # Map TreeNode → TorrentTreeNode so we can toggle selection.
         self._node_map: dict[int, TorrentTreeNode] = {}
+        self._search_query: str = ""
 
-    # ── layout ──
+    # ── layout ───────────────────────────────────────────────────────────────
+
     def compose(self) -> ComposeResult:
         yield Header(show_clock=False)
         with Horizontal(id="tsel_summary_row"):
@@ -87,46 +98,57 @@ class TorrentSelectScreen(Screen):
         with Horizontal(id="tsel_actions"):
             yield Button("Select All [A]", id="tsel_all")
             yield Button("Select None [N]", id="tsel_none")
-            yield Button("Toggle [Space]", id="tsel_toggle", variant="primary")
             yield Button("Download [D]", id="tsel_download", variant="success")
             yield Button("Back [Esc]", id="tsel_back")
+        yield Input(placeholder="Filter files/folders… (Esc to clear)", id="tsel_search")
         yield Tree("(loading)", id="tsel_tree")
         yield StatusBar(id="status_bar")
         yield Footer()
 
+    # ── lifecycle ─────────────────────────────────────────────────────────────
+
     def on_mount(self) -> None:
-        tree = self.query_one("#tsel_tree", Tree)
-        tree.show_root = True
-        tree.root.expand()
-        self._build_tree(tree.root, self._torrent.tree)
-        self._refresh_labels(tree.root)
+        self.query_one("#tsel_search", Input).display = False
+        self._rebuild_tree()
         self._update_status()
-        tree.focus()
+        self.query_one("#tsel_tree", Tree).focus()
 
-    # ── tree build ──
-    def _build_tree(self, parent_tnode: TreeNode, t_node: TorrentTreeNode) -> None:
-        # set root data
-        if parent_tnode.parent is None:
-            parent_tnode.data = t_node
-            self._node_map[id(parent_tnode)] = t_node
-            parent_tnode.set_label(self._label_for(t_node))
+    # ── tree ──────────────────────────────────────────────────────────────────
 
-        # sort: dirs first, then files, alphabetic
+    def _rebuild_tree(self) -> None:
+        tree = self.query_one("#tsel_tree", Tree)
+        self._node_map.clear()
+        tree.clear()
+        root = tree.root
+        root.data = self._torrent.tree
+        self._node_map[id(root)] = self._torrent.tree
+        root.set_label(f"[b]{self._torrent.name}[/b]")
+        self._build_subtree(root, self._torrent.tree)
+        root.expand()
+
+    def _build_subtree(self, parent_tnode: TreeNode, t_node: TorrentTreeNode) -> None:
+        query = self._search_query
         children = sorted(
             t_node.children.values(),
             key=lambda c: (not c.is_dir, c.name.lower()),
         )
         for child in children:
-            sub = parent_tnode.add(self._label_for(child), data=child, expand=False)
+            if query and not _node_matches_filter(child, query):
+                continue
+            sub = parent_tnode.add(
+                self._label_for(child),
+                data=child,
+                expand=bool(query),
+            )
             self._node_map[id(sub)] = child
             if child.is_dir:
-                self._build_tree(sub, child)
+                self._build_subtree(sub, child)
             else:
                 sub.allow_expand = False
 
     def _label_for(self, node: TorrentTreeNode) -> str:
         state = self._selection.node_state(node)
-        if state == "all" or state == "on":
+        if state in ("all", "on"):
             box = "[green][x][/green]"
         elif state == "partial":
             box = "[yellow][~][/yellow]"
@@ -134,8 +156,8 @@ class TorrentSelectScreen(Screen):
             box = "[ ]"
         size_str = format_size(node.size)
         if node.is_dir:
-            return f"{box} 📁 {node.name}/  [dim]({size_str})[/dim]"
-        return f"{box}    {node.name}  [dim]({size_str})[/dim]"
+            return f"{box} {node.name}/  [dim]({size_str})[/dim]"
+        return f"{box} {node.name}  [dim]({size_str})[/dim]"
 
     def _refresh_labels(self, tnode: TreeNode) -> None:
         data = self._node_map.get(id(tnode))
@@ -144,34 +166,69 @@ class TorrentSelectScreen(Screen):
         for child in tnode.children:
             self._refresh_labels(child)
 
+    # ── status ────────────────────────────────────────────────────────────────
+
     def _update_status(self) -> None:
         count = self._selection.selected_count()
         size = self._selection.selected_size(self._torrent.files)
+        if self._search_query:
+            hint = f"  |  Filter: '{self._search_query}'  (Esc to clear)"
+        else:
+            hint = "  |  S=search  Space=toggle  A=all  N=none  D=download"
         self.query_one("#status_bar", StatusBar).set_text(
-            f"Selected: {count}/{self._torrent.file_count} files  |  "
-            f"{format_size(size)}  |  Space toggles, A=all, N=none, D=download"
+            f"Selected: {count}/{self._torrent.file_count} files  |  {format_size(size)}{hint}"
         )
 
-    # ── events ──
+    # ── events ────────────────────────────────────────────────────────────────
+
+    def on_input_changed(self, event: Input.Changed) -> None:
+        if event.input.id == "tsel_search":
+            self._search_query = event.value.strip()
+            self._rebuild_tree()
+            self._update_status()
+
+    def on_key(self, event: Any) -> None:
+        """Esc inside the search input clears it and hides the bar."""
+        if event.key == "escape":
+            inp = self.query_one("#tsel_search", Input)
+            if inp.has_focus or self._search_query:
+                inp.value = ""
+                self._search_query = ""
+                inp.display = False
+                self._rebuild_tree()
+                self._update_status()
+                self.query_one("#tsel_tree", Tree).focus()
+                event.stop()
+
     def on_button_pressed(self, event: Button.Pressed) -> None:
         bid = event.button.id
         if bid == "tsel_all":
             self.action_select_all()
         elif bid == "tsel_none":
             self.action_select_none()
-        elif bid == "tsel_toggle":
-            self.action_toggle()
         elif bid == "tsel_download":
             asyncio.ensure_future(self._do_download())
         elif bid == "tsel_back":
             self.app.pop_screen()
 
-    # ── actions ──
-    def action_back(self) -> None:
-        self.app.pop_screen()
+    # ── actions ───────────────────────────────────────────────────────────────
 
-    def action_quit(self) -> None:
-        self.app.exit()
+    def action_escape_action(self) -> None:
+        inp = self.query_one("#tsel_search", Input)
+        if self._search_query or inp.has_focus:
+            inp.value = ""
+            self._search_query = ""
+            inp.display = False
+            self._rebuild_tree()
+            self._update_status()
+            self.query_one("#tsel_tree", Tree).focus()
+        else:
+            self.app.pop_screen()
+
+    def action_focus_search(self) -> None:
+        inp = self.query_one("#tsel_search", Input)
+        inp.display = True
+        inp.focus()
 
     def action_toggle(self) -> None:
         tree = self.query_one("#tsel_tree", Tree)
@@ -187,20 +244,22 @@ class TorrentSelectScreen(Screen):
 
     def action_select_all(self) -> None:
         self._selection.select_all()
-        tree = self.query_one("#tsel_tree", Tree)
-        self._refresh_labels(tree.root)
+        self._refresh_labels(self.query_one("#tsel_tree", Tree).root)
         self._update_status()
 
     def action_select_none(self) -> None:
         self._selection.deselect_all()
-        tree = self.query_one("#tsel_tree", Tree)
-        self._refresh_labels(tree.root)
+        self._refresh_labels(self.query_one("#tsel_tree", Tree).root)
         self._update_status()
 
     def action_download(self) -> None:
         asyncio.ensure_future(self._do_download())
 
-    # ── download ──
+    def action_quit(self) -> None:
+        self.app.exit()
+
+    # ── download ──────────────────────────────────────────────────────────────
+
     async def _do_download(self) -> None:
         if self._selection.selected_count() == 0:
             self.query_one("#status_bar", StatusBar).set_text(
@@ -210,7 +269,6 @@ class TorrentSelectScreen(Screen):
 
         settings = self.app.settings  # type: ignore[attr-defined]
 
-        # Resolve save path
         try:
             save_path = resolve_save_path(
                 runtime=None,
@@ -230,16 +288,13 @@ class TorrentSelectScreen(Screen):
         if not confirmed:
             return
 
-        # Disable buttons during work
-        for bid in ("tsel_all", "tsel_none", "tsel_toggle", "tsel_download"):
+        for bid in ("tsel_all", "tsel_none", "tsel_download"):
             try:
                 self.query_one(f"#{bid}", Button).disabled = True
             except Exception:
                 pass
 
-        self.query_one("#status_bar", StatusBar).set_text(
-            "Connecting to qBittorrent…"
-        )
+        self.query_one("#status_bar", StatusBar).set_text("Connecting to qBittorrent…")
 
         cfg = QbitConfig(
             host=settings.qbit_host,
@@ -281,7 +336,7 @@ class TorrentSelectScreen(Screen):
         self._reenable_buttons()
 
     def _reenable_buttons(self) -> None:
-        for bid in ("tsel_all", "tsel_none", "tsel_toggle", "tsel_download"):
+        for bid in ("tsel_all", "tsel_none", "tsel_download"):
             try:
                 self.query_one(f"#{bid}", Button).disabled = False
             except Exception:

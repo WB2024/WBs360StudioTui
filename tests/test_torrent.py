@@ -358,3 +358,48 @@ async def test_qbit_no_save_path_omitted(monkeypatch, tmp_path):
     )
 
     assert "save_path" not in fake.added[0]
+
+
+# ── Tree filter helper ────────────────────────────────────────────────────
+
+class TestNodeMatchesFilter:
+    """Tests for _node_matches_filter in torrent_select."""
+
+    def setup_method(self):
+        from app.tui.screens.torrent_select import _node_matches_filter
+        self._matches = _node_matches_filter
+
+    def test_matches_own_name(self, decoded: DecodedTorrent):
+        readme = decoded.tree.children["readme.txt"]
+        assert self._matches(readme, "readme")
+
+    def test_matches_descendant(self, decoded: DecodedTorrent):
+        # disc1 contains iso.cue; query "cue" should match disc1 via descendant
+        disc1 = decoded.tree.children["disc1"]
+        assert self._matches(disc1, "cue")
+
+    def test_no_match_returns_false(self, decoded: DecodedTorrent):
+        readme = decoded.tree.children["readme.txt"]
+        assert not self._matches(readme, "zzz_no_such")
+
+    def test_case_insensitive(self, decoded: DecodedTorrent):
+        readme = decoded.tree.children["readme.txt"]
+        assert self._matches(readme, "README")
+        assert self._matches(readme, "ReadMe")
+
+    def test_partial_match(self, decoded: DecodedTorrent):
+        disc1 = decoded.tree.children["disc1"]
+        assert self._matches(disc1, "disc")
+
+    def test_no_match_in_folder_returns_false(self, decoded: DecodedTorrent):
+        extras = decoded.tree.children["extras"]
+        assert not self._matches(extras, "iso")
+
+    def test_root_tree_matches_via_any_descendant(self, decoded: DecodedTorrent):
+        assert self._matches(decoded.tree, "manual")
+
+    def test_empty_query_always_matches(self, decoded: DecodedTorrent):
+        # Every name contains ""
+        for child in decoded.tree.children.values():
+            assert self._matches(child, "")
+
