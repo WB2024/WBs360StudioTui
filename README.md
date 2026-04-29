@@ -46,6 +46,12 @@ Data powered by [Arisen Studio](https://arisen.studio) — the largest open Xbox
 
 ---
 
+### Local Trainers — Library Filter + Local Source
+![Local Trainers Library Filter](Screenshots/LocalTrainers-GamesInLibrary.png)
+*Combining both filters: **Source: Local** restricts the list to trainers sourced from the `LocalTrainers/` repo folder, while **Library ✓** narrows results to only games present in your scanned library. Each row shows the `[A]` (Aurora) tag and `[L]` (local file) suffix. The detail pane confirms `Source: Local`, the Aurora install path, and the full path to the local `.xex` file on disk.*
+
+---
+
 ### All Trainers
 ![All Trainers](Screenshots/AllTrainers.png)
 *The full trainers browser — 583 trainers across hundreds of games. Search by game name, Title ID, or trainer name. The `[A]` prefix indicates Aurora-compatible trainers; `[X]` indicates XBDM. The Library button in the top-right toggles the library filter.*

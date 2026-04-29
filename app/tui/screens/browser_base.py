@@ -54,8 +54,7 @@ class BrowserScreen(Screen):
             return {self._title_id_filter}
         if self._library_only:
             library: dict[str, str] = getattr(self.app, "library", {})
-            if library:
-                return set(library.keys())
+            return set(library.keys())
         return None
 
     @property
