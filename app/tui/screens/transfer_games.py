@@ -178,6 +178,7 @@ class TransferGamesScreen(Screen):
             with Vertical(id="browser_left"):
                 with Horizontal(id="filter_bar"):
                     yield Input(placeholder="Search by game name or Title ID...", id="search_input")
+                    yield Button("Refresh [R]", id="refresh_btn")
                     yield Button("Transfer", id="transfer_btn", variant="primary")
                 yield ModTable(id="mod_table")
             with Vertical(id="browser_right"):
@@ -263,6 +264,8 @@ class TransferGamesScreen(Screen):
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "transfer_btn":
             self.action_transfer()
+        elif event.button.id == "refresh_btn":
+            self.action_refresh()
 
     # --- Actions ---
 
