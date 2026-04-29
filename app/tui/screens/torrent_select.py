@@ -131,6 +131,7 @@ class TorrentSelectScreen(Screen):
             yield Button("Back [Esc]", id="tsel_back")
         yield Input(placeholder="Filter files/folders… (Esc to clear)", id="tsel_search")
         yield Tree("(loading)", id="tsel_tree")
+        yield Static("", id="tsel_log")
         yield StatusBar(id="status_bar")
         yield Footer()
 
@@ -138,6 +139,7 @@ class TorrentSelectScreen(Screen):
 
     def on_mount(self) -> None:
         self.query_one("#tsel_search", Input).display = False
+        self.query_one("#tsel_log", Static).display = False
         self._rebuild_tree()
         self._update_status()
         self.query_one("#tsel_tree", Tree).focus()
@@ -291,9 +293,7 @@ class TorrentSelectScreen(Screen):
 
     async def _do_download(self) -> None:
         if self._selection.selected_count() == 0:
-            self.query_one("#status_bar", StatusBar).set_text(
-                "No files selected — pick at least one file with Space."
-            )
+            self._set_status("No files selected — pick at least one file with Space.", error=True)
             return
 
         settings = self.app.settings  # type: ignore[attr-defined]
@@ -305,7 +305,7 @@ class TorrentSelectScreen(Screen):
                 create=True,
             )
         except DownloadPathError as exc:
-            self.query_one("#status_bar", StatusBar).set_text(f"Save path error: {exc}")
+            self._set_status(f"Save path error: {exc}", error=True)
             return
 
         size = self._selection.selected_size(self._torrent.files)
@@ -317,13 +317,10 @@ class TorrentSelectScreen(Screen):
         if not confirmed:
             return
 
-        for bid in ("tsel_all", "tsel_none", "tsel_download"):
-            try:
-                self.query_one(f"#{bid}", Button).disabled = True
-            except Exception:
-                pass
+        self._set_buttons_enabled(False)
 
-        self.query_one("#status_bar", StatusBar).set_text("Connecting to qBittorrent…")
+        host = f"{settings.qbit_host}:{settings.qbit_port}"
+        self._set_status(f"Connecting to qBittorrent at {host}…")
 
         cfg = QbitConfig(
             host=settings.qbit_host,
@@ -335,14 +332,17 @@ class TorrentSelectScreen(Screen):
         try:
             await client.connect()
         except QbitConnectionError as exc:
-            self.query_one("#status_bar", StatusBar).set_text(
-                f"qBittorrent connection failed: {exc}"
+            self._set_status(
+                f"[red]Connection failed:[/red] {exc}\n"
+                f"Check Settings → qBittorrent host/port/credentials (currently: {host})",
+                error=True,
             )
-            self._reenable_buttons()
+            self._set_buttons_enabled(True)
             return
 
-        self.query_one("#status_bar", StatusBar).set_text(
-            "Adding torrent (paused) and applying file priorities…"
+        self._set_status(
+            f"Connected to qBittorrent at {host}\n"
+            f"Adding torrent (paused) and applying file priorities…"
         )
 
         try:
@@ -354,19 +354,32 @@ class TorrentSelectScreen(Screen):
                 save_path=save_path,
             )
         except QbitAddError as exc:
-            self.query_one("#status_bar", StatusBar).set_text(f"Failed: {exc}")
-            self._reenable_buttons()
+            self._set_status(f"[red]Failed to add torrent:[/red] {exc}", error=True)
+            self._set_buttons_enabled(True)
             return
 
-        self.query_one("#status_bar", StatusBar).set_text(
-            f"Download started — {count} file(s), {format_size(size)} → "
-            f"{save_path or 'qBittorrent default'}  |  hash: {info_hash[:12]}…"
+        dest = save_path or "qBittorrent default location"
+        self._set_status(
+            f"[green]Download started![/green]\n"
+            f"  Files:     {count} selected\n"
+            f"  Size:      {format_size(size)}\n"
+            f"  Save to:   {dest}\n"
+            f"  Hash:      {info_hash}\n\n"
+            f"Monitor progress in qBittorrent (http://{host})."
         )
-        self._reenable_buttons()
+        self._set_buttons_enabled(True)
 
-    def _reenable_buttons(self) -> None:
+    def _set_status(self, text: str, error: bool = False) -> None:
+        log = self.query_one("#tsel_log", Static)
+        log.update(text)
+        log.display = True
+        # Keep status bar in sync with a one-liner summary
+        first_line = text.split("\n")[0]
+        self.query_one("#status_bar", StatusBar).set_text(first_line)
+
+    def _set_buttons_enabled(self, enabled: bool) -> None:
         for bid in ("tsel_all", "tsel_none", "tsel_download"):
             try:
-                self.query_one(f"#{bid}", Button).disabled = False
+                self.query_one(f"#{bid}", Button).disabled = not enabled
             except Exception:
                 pass

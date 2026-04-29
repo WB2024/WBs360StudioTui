@@ -341,3 +341,41 @@ RenameModal {
 #rename_btns Button {
     margin-right: 1;
 }
+
+/* Torrent selector screen */
+
+ConfirmDownloadModal {
+    align: center middle;
+}
+
+ConfirmTidyModal {
+    align: center middle;
+}
+
+#tsel_log {
+    height: auto;
+    min-height: 3;
+    max-height: 10;
+    padding: 1 2;
+    background: #0d1a2e;
+    border: solid #1a3a5a;
+    margin: 0 0 1 0;
+}
+
+#tsel_summary_row {
+    height: auto;
+    padding: 0 1;
+}
+
+#tsel_actions {
+    height: auto;
+    padding: 0 1;
+}
+
+#tsel_actions Button {
+    margin-right: 1;
+}
+
+#tsel_search {
+    margin: 0 1;
+}
