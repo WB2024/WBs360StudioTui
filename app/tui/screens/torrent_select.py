@@ -22,6 +22,35 @@ from app.tui.widgets.status_bar import StatusBar
 
 class ConfirmDownloadModal(ModalScreen[bool]):
     BINDINGS = [("escape", "cancel", "Cancel")]
+    DEFAULT_CSS = """
+    ConfirmDownloadModal {
+        align: center middle;
+    }
+    #confirm_box {
+        width: 60;
+        height: auto;
+        border: thick $primary;
+        padding: 1 2;
+        background: $surface;
+    }
+    #confirm_title {
+        text-style: bold;
+        margin-bottom: 1;
+    }
+    #confirm_summary {
+        margin-bottom: 1;
+    }
+    #confirm_warn {
+        margin-bottom: 1;
+    }
+    #confirm_btns {
+        height: auto;
+        align: center middle;
+    }
+    #confirm_btns Button {
+        margin: 0 1;
+    }
+    """
 
     def __init__(self, count: int, size: int, save_path: str | None) -> None:
         super().__init__()
