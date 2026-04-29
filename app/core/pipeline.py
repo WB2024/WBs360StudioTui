@@ -104,10 +104,13 @@ class PipelineGame:
 # ── Scan ──────────────────────────────────────────────────────────────────────
 
 def scan_download_folder(folder: str | Path) -> list[PipelineGame]:
-    """Scan *folder* for ISOs and GOD containers.
+    """Recursively scan *folder* for ISOs and GOD containers at any depth.
 
     Returns one PipelineGame per ISO file (multi-disc = multiple entries)
     and one per GOD container found.
+
+    Game name is taken from the immediate parent folder, or the file stem
+    for flat ISOs sitting directly in *folder*.
     """
     root = Path(folder)
     if not root.is_dir():
@@ -115,30 +118,52 @@ def scan_download_folder(folder: str | Path) -> list[PipelineGame]:
         return []
 
     games: list[PipelineGame] = []
+    # Track which dirs we already handled as GOD containers to avoid
+    # also picking up their individual files as ISOs.
+    god_roots: set[Path] = set()
 
-    for entry in sorted(root.iterdir()):
-        if entry.is_file() and entry.suffix.lower() in _ISO_EXT:
-            # Flat ISO directly in the folder
+    # ── Pass 1: find GOD containers (directories with a TitleID sub-folder) ──
+    # Walk all directories looking for the TitleID pattern.
+    for entry in sorted(root.rglob("*")):
+        if not entry.is_dir():
+            continue
+        god_items = _try_scan_god_dir(entry)
+        if god_items:
+            for g in god_items:
+                games.append(PipelineGame(name=entry.name, god=g))
+            god_roots.add(entry.resolve())
+
+    # ── Pass 2: find ISO files not inside a known GOD container ──
+    # Group by parent dir so multi-disc detection works.
+    iso_by_parent: dict[Path, list[Path]] = {}
+    for iso_file in sorted(root.rglob("*")):
+        if not iso_file.is_file() or iso_file.suffix.lower() not in _ISO_EXT:
+            continue
+        # Skip ISOs that live inside a recognised GOD container dir
+        if any(iso_file.resolve().is_relative_to(gr) for gr in god_roots):
+            continue
+        parent = iso_file.parent.resolve()
+        iso_by_parent.setdefault(parent, []).append(iso_file.resolve())
+
+    for parent, iso_files in sorted(iso_by_parent.items()):
+        # Derive game name: parent folder (unless that's the root itself)
+        folder_name = parent.name if parent != root.resolve() else None
+        isos = sorted(iso_files)
+        if len(isos) == 1:
+            name = folder_name or isos[0].stem
             games.append(PipelineGame(
-                name=entry.stem,
-                iso=DiscoveredIso(name=entry.stem, iso_path=entry.resolve(), disc_label=""),
+                name=name,
+                iso=DiscoveredIso(name=name, iso_path=isos[0], disc_label=""),
             ))
-
-        elif entry.is_dir():
-            # Check if it's already a GOD container (has 8-hex TitleID sub-folder)
-            god_items = _try_scan_god_dir(entry)
-            if god_items:
-                for g in god_items:
-                    games.append(PipelineGame(name=entry.name, god=g))
-            else:
-                # Look for ISOs inside the folder
-                isos = _find_isos_in_dir(entry)
-                for iso_path, disc_label in isos:
-                    name = entry.name
-                    games.append(PipelineGame(
-                        name=name,
-                        iso=DiscoveredIso(name=name, iso_path=iso_path, disc_label=disc_label),
-                    ))
+        else:
+            for iso_path in isos:
+                m = re.search(r"(disc\s*\d+)", iso_path.stem, re.IGNORECASE)
+                label = m.group(1).lower().replace(" ", "") if m else iso_path.stem
+                name = folder_name or iso_path.stem
+                games.append(PipelineGame(
+                    name=name,
+                    iso=DiscoveredIso(name=name, iso_path=iso_path, disc_label=label),
+                ))
 
     log.info("Pipeline scan found %d item(s) in %s", len(games), root)
     return games
@@ -311,18 +336,16 @@ def find_7zip() -> str | None:
 
 
 def scan_archives(folder: str | Path) -> list[DiscoveredArchive]:
-    """Scan *folder* (1 level deep) for archive files.
+    """Recursively scan *folder* for archive files at any depth.
 
-    Returns one DiscoveredArchive per archive found at the top level or
-    inside a single-level subfolder. Archives nested deeper are ignored.
+    Returns one DiscoveredArchive per archive found.
     """
     root = Path(folder)
     if not root.is_dir():
         return []
 
     archives: list[DiscoveredArchive] = []
-
-    for entry in sorted(root.iterdir()):
+    for entry in sorted(root.rglob("*")):
         if entry.is_file() and entry.suffix.lower() in ARCHIVE_EXTS:
             archives.append(DiscoveredArchive(
                 name=entry.stem,
@@ -330,16 +353,6 @@ def scan_archives(folder: str | Path) -> list[DiscoveredArchive]:
                 ext=entry.suffix.lower(),
                 size_bytes=entry.stat().st_size,
             ))
-        elif entry.is_dir():
-            # Also check one level inside subfolders
-            for sub in sorted(entry.iterdir()):
-                if sub.is_file() and sub.suffix.lower() in ARCHIVE_EXTS:
-                    archives.append(DiscoveredArchive(
-                        name=sub.stem,
-                        archive_path=sub.resolve(),
-                        ext=sub.suffix.lower(),
-                        size_bytes=sub.stat().st_size,
-                    ))
 
     log.info("Archive scan found %d archive(s) in %s", len(archives), root)
     return archives
