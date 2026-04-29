@@ -10,7 +10,7 @@
 [![License](https://img.shields.io/badge/License-MIT-green)]()
 [![Tests](https://img.shields.io/badge/Tests-26%20passing-brightgreen)]()
 
-Data powered by [Arisen Studio](https://arisen.studio) — the largest open Xbox 360 mod database.
+Some data powered by [Arisen Studio](https://arisen.studio) — the largest open Xbox 360 mod database.
 
 ---
 
