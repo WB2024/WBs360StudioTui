@@ -1,6 +1,7 @@
 """FTP File Browser screen for navigating the Xbox 360 filesystem."""
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from typing import Any
 
@@ -258,21 +259,19 @@ class FtpBrowserScreen(Screen):
         }
         action = mapping.get(event.button.id)
         if action:
-            action()
+            result = action()
+            if asyncio.iscoroutine(result):
+                asyncio.ensure_future(result)
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
         """Enter key: navigate into directories."""
         entry = self._selected_entry()
         if entry and entry.is_dir:
-            self._navigate(self._join(entry.name))
+            asyncio.ensure_future(self._list_path(self._join(entry.name)))
 
     # --- Actions ---
 
-    def action_back(self) -> None:
-        self._disconnect_and_back()
-
-    @work(exclusive=False, exit_on_error=False)
-    async def _disconnect_and_back(self) -> None:
+    async def action_back(self) -> None:
         if self._client:
             try:
                 await self._client.disconnect()
@@ -286,13 +285,13 @@ class FtpBrowserScreen(Screen):
         """Navigate to a path as a worker (avoids passing coroutine objects to run_worker)."""
         await self._list_path(path)
 
-    def action_go_up(self) -> None:
+    async def action_go_up(self) -> None:
         if self._path == "/":
             return
-        self._navigate(self._parent())
+        await self._list_path(self._parent())
 
-    def action_refresh(self) -> None:
-        self._navigate(self._path)
+    async def action_refresh(self) -> None:
+        await self._list_path(self._path)
 
     def action_rename(self) -> None:
         entry = self._selected_entry()
@@ -307,9 +306,8 @@ class FtpBrowserScreen(Screen):
     def _do_rename(self, entry: FtpEntry, new_name: str | None) -> None:
         if not new_name or new_name == entry.name:
             return
-        self._rename_worker(entry, new_name)
+        asyncio.ensure_future(self._rename_worker(entry, new_name))
 
-    @work(exclusive=False, exit_on_error=False)
     async def _rename_worker(self, entry: FtpEntry, new_name: str) -> None:
         if not self._client:
             self._set_status("Not connected.")
@@ -334,9 +332,8 @@ class FtpBrowserScreen(Screen):
     def _do_delete(self, entry: FtpEntry, confirmed: bool) -> None:
         if not confirmed:
             return
-        self._delete_worker(entry)
+        asyncio.ensure_future(self._delete_worker(entry))
 
-    @work(exclusive=False, exit_on_error=False)
     async def _delete_worker(self, entry: FtpEntry) -> None:
         if not self._client:
             self._set_status("Not connected.")
