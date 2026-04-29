@@ -30,7 +30,7 @@ Data powered by [Arisen Studio](https://arisen.studio) — the largest open Xbox
 
 ### Main Menu
 ![Main Menu](Screenshots/Home.png)
-*The main menu shows your FTP connection status (green dot = connected), live database counts (583 trainers, 70 mods, 55 homebrew, 133 patches, etc.), and quick-access buttons for every category. My Library is pinned at the top in green.*
+*The main menu shows your FTP connection status, live database counts (583 trainers, 70 mods, 55 homebrew, 133 patches, etc.), and quick-access buttons for every category. My Library is pinned at the top in green. The two orange buttons — Transfer Games and ISO → GOD — give you direct access to the local game management tools.*
 
 ---
 
@@ -79,6 +79,18 @@ Data powered by [Arisen Studio](https://arisen.studio) — the largest open Xbox
 ### Game Patches
 ![Game Patches](Screenshots/AllPatches.png)
 *133 title update patches across games including Skyrim, Resident Evil series, GTA V, Mirror's Edge, and more. Source `.patch.toml` files listed with Title ID for accurate matching.*
+
+---
+
+### Transfer Games
+![Transfer Games](Screenshots/TransferGames.png)
+*The Transfer Games screen lists all locally-stored GOD format games found in your configured GOD path — 35 games shown here. Selecting Alan Wake reveals its Title ID (`4D530805`), content type folder (`00007000`), container file, the number of files to transfer (43), total size (6.67 GB), local path, and the install destination on the console. Hit Transfer (or `I`) to push the game over FTP or to a mounted USB drive.*
+
+---
+
+### ISO → GOD Converter
+![ISO → GOD Converter](Screenshots/ISO2God.png)
+*The ISO → GOD converter scans your local ISO folder and lists all Xbox 360 disc images. Here Dead Space (Europe) and Minecraft are detected at 7.30 GB each. The detail pane shows the full ISO path, the output GOD folder, and the binary status (`Ready (v1.8.1)`). The `iso2god` binary (v1.8.1, powered by [iso2god-rs](https://github.com/iliazeus/iso2god-rs)) is downloaded automatically on first use — just click "Get Binary". Hit Convert to GOD (or `C`) to start the conversion with a live progress bar.*
 
 ---
 
@@ -134,6 +146,20 @@ It pulls live data from the Arisen Studio public database — thousands of mods,
 - Auto-detect or manually specify USB mount path
 - Drive prefix stripped automatically
 
+### 🎮 Transfer Games
+- Browse locally-stored **GOD (Games on Demand)** format games from a configured local folder
+- View per-game details: Title ID, content type, container file, file count, and total size
+- Transfer to your Xbox 360 via **FTP** or directly to a **mounted USB drive**
+- Searches by game name or Title ID
+- Install destination configurable (default: `Hdd:\Content\0000000000000000\`)
+
+### 💿 ISO → GOD Converter
+- Scan a local folder for Xbox 360 **ISO disc images** and list them with name and size
+- Convert ISOs to **GOD format** using the [iso2god-rs](https://github.com/iliazeus/iso2god-rs) binary (v1.8.1)
+- Binary is **downloaded automatically** on first use — no manual setup required
+- Live progress bar showing current part, total parts, and detected Title ID / game name
+- Output goes directly to your configured **Local GOD Path**, ready to transfer via Transfer Games
+
 ### ⚙️ Settings
 - **Connection Profiles** — add, edit, delete, set default FTP connections
 - **FTP Test / Reconnect / Disconnect** — inline connection health check with live status
@@ -141,6 +167,9 @@ It pulls live data from the Arisen Studio public database — thousands of mods,
 - **Game Library Paths** — semicolon-separated Xbox paths for library scanning
 - **Library Scan Depth** — how many folder levels deep to search (default: 4)
 - **Download Directory** — where files are saved locally
+- **Local GOD Path** — folder containing your converted GOD games (used by Transfer Games)
+- **Local ISO Path** — folder containing your Xbox 360 ISO files (used by ISO → GOD)
+- **Game Install Path** — destination path on console for GOD game transfers (default: `Hdd:\Content\0000000000000000\`)
 - **DB Cache** — refresh from Arisen servers or clear, with age display
 
 ### 🔧 Technical
@@ -203,8 +232,9 @@ pyinstaller --onefile --name x360tm main.py
 | `↑` `↓` | Navigate list |
 | `/` | Focus search bar |
 | `L` | Toggle library filter (show only your games) |
-| `I` | Install selected item |
+| `I` | Install selected item / Transfer GOD game (Transfer Games screen) |
 | `D` | Download selected item |
+| `C` | Convert selected ISO to GOD (ISO → GOD screen) |
 | `R` | Refresh table |
 | `S` | Scan library (My Library screen) |
 | `Esc` | Go back |
