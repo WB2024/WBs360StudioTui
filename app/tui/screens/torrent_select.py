@@ -55,7 +55,7 @@ class ConfirmDownloadModal(ModalScreen[bool]):
     def __init__(self, count: int, size: int, save_path: str | None) -> None:
         super().__init__()
         self._count = count
-        self._size = size
+        self._total_bytes = size
         self._save_path = save_path
 
     def compose(self) -> ComposeResult:
@@ -63,7 +63,7 @@ class ConfirmDownloadModal(ModalScreen[bool]):
             yield Static("[b]Start Download?[/b]", id="confirm_title")
             yield Static(
                 f"  Files selected:  {self._count}\n"
-                f"  Total size:      {format_size(self._size)}\n"
+                f"  Total size:      {format_size(self._total_bytes)}\n"
                 f"  Save path:       {self._save_path or '(qBittorrent default)'}",
                 id="confirm_summary",
             )
