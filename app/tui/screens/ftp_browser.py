@@ -4,6 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from textual import work
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
@@ -165,10 +166,11 @@ class FtpBrowserScreen(Screen):
         bar = self.query_one("#conn_bar", ConnectionBar)
         s = self.app.connection_status  # type: ignore[attr-defined]
         bar.set_status(connected=s["connected"], text=s["text"])
-        self.run_worker(self._connect_and_list(), exclusive=True)
+        self._connect_and_list()
 
     # --- Connection & listing ---
 
+    @work(exclusive=True, exit_on_error=False)
     async def _connect_and_list(self) -> None:
         prof = self.app.settings.default_profile()  # type: ignore[attr-defined]
         if prof is None:
@@ -262,13 +264,14 @@ class FtpBrowserScreen(Screen):
         """Enter key: navigate into directories."""
         entry = self._selected_entry()
         if entry and entry.is_dir:
-            self.run_worker(self._list_path(self._join(entry.name)), exclusive=True)
+            self._navigate(self._join(entry.name))
 
     # --- Actions ---
 
     def action_back(self) -> None:
-        self.app.run_worker(self._disconnect_and_back(), exclusive=False)
+        self._disconnect_and_back()
 
+    @work(exclusive=False, exit_on_error=False)
     async def _disconnect_and_back(self) -> None:
         if self._client:
             try:
@@ -278,13 +281,18 @@ class FtpBrowserScreen(Screen):
             self._client = None
         self.app.pop_screen()
 
+    @work(exclusive=True, exit_on_error=False)
+    async def _navigate(self, path: str) -> None:
+        """Navigate to a path as a worker (avoids passing coroutine objects to run_worker)."""
+        await self._list_path(path)
+
     def action_go_up(self) -> None:
         if self._path == "/":
             return
-        self.run_worker(self._list_path(self._parent()), exclusive=True)
+        self._navigate(self._parent())
 
     def action_refresh(self) -> None:
-        self.run_worker(self._list_path(self._path), exclusive=True)
+        self._navigate(self._path)
 
     def action_rename(self) -> None:
         entry = self._selected_entry()
@@ -299,8 +307,9 @@ class FtpBrowserScreen(Screen):
     def _do_rename(self, entry: FtpEntry, new_name: str | None) -> None:
         if not new_name or new_name == entry.name:
             return
-        self.run_worker(self._rename_worker(entry, new_name), exclusive=False)
+        self._rename_worker(entry, new_name)
 
+    @work(exclusive=False, exit_on_error=False)
     async def _rename_worker(self, entry: FtpEntry, new_name: str) -> None:
         if not self._client:
             self._set_status("Not connected.")
@@ -325,8 +334,9 @@ class FtpBrowserScreen(Screen):
     def _do_delete(self, entry: FtpEntry, confirmed: bool) -> None:
         if not confirmed:
             return
-        self.run_worker(self._delete_worker(entry), exclusive=False)
+        self._delete_worker(entry)
 
+    @work(exclusive=False, exit_on_error=False)
     async def _delete_worker(self, entry: FtpEntry) -> None:
         if not self._client:
             self._set_status("Not connected.")
