@@ -1,7 +1,6 @@
 """Torrent file selector — tree view with optional filter, submit to qBittorrent."""
 from __future__ import annotations
 
-import asyncio
 from typing import Any
 
 from textual.app import ComposeResult
@@ -238,7 +237,7 @@ class TorrentSelectScreen(Screen):
         elif bid == "tsel_none":
             self.action_select_none()
         elif bid == "tsel_download":
-            asyncio.ensure_future(self._do_download())
+            self.run_worker(self._do_download(), exclusive=True)
         elif bid == "tsel_back":
             self.app.pop_screen()
 
@@ -283,8 +282,8 @@ class TorrentSelectScreen(Screen):
         self._refresh_labels(self.query_one("#tsel_tree", Tree).root)
         self._update_status()
 
-    def action_download(self) -> None:
-        asyncio.ensure_future(self._do_download())
+    async def action_download(self) -> None:
+        await self._do_download()
 
     def action_quit(self) -> None:
         self.app.exit()
