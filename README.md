@@ -31,6 +31,8 @@ Some data powered by [Arisen Studio](https://arisen.studio) — the largest open
 
 ## � Screenshots
 
+Note - some screenshots may not be up-to-date with all of the functionality in the latest builds, as its being developed at a fairly rapid pace I will just leave the old screenshots in for now until the next full stable build.
+
 ### Main Menu
 
 ![Main Menu](Screenshots/Home.png)
