@@ -207,7 +207,7 @@ class TransferGamesScreen(Screen):
             if not q or q in g.name.lower() or q in g.title_id.lower()
         ]
 
-        columns = ["Game Name", "Title ID", "Content Type", "Files", "Size (GB)"]
+        columns = ["Game Name", "Title ID", "Type", "Content Type", "Files", "Size (GB)"]
         rows: list[tuple[Any, list[str]]] = []
         for g in filtered:
             rows.append((
@@ -215,6 +215,7 @@ class TransferGamesScreen(Screen):
                 [
                     g.name,
                     g.title_id,
+                    g.kind,
                     g.content_type,
                     str(g.file_count),
                     f"{g.total_size_gb:.2f}",

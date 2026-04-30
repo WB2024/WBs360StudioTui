@@ -24,6 +24,26 @@ class GodGameItem:
                 out.append((f, rel))
         return out
 
+    # Content type hex values that represent a playable game (not a TU or DLC)
+    _GAME_CONTENT_TYPES = {
+        "00007000",  # Xbox 360 disc / XBLA
+        "000d0000",  # Game on Demand
+        "00009000",  # Indie game
+        "00080000",  # Arcade title
+        "00002000",  # XBLA (retail)
+    }
+
+    @property
+    def kind(self) -> str:
+        """Human-readable type: 'Game' or 'Title Update' based on content type."""
+        ct = self.content_type.lower().lstrip("0") or "0"
+        # 000B0000 = title update / storage download; others in _GAME_CONTENT_TYPES = game
+        if self.content_type.lower() in self._GAME_CONTENT_TYPES:
+            return "Game"
+        if self.content_type.lower() == "000b0000":
+            return "Title Update"
+        return "Game"  # default fallback for unrecognised types
+
     @property
     def file_count(self) -> int:
         return sum(1 for f in self.local_path.rglob("*") if f.is_file())
