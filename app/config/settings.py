@@ -70,6 +70,8 @@ class Settings:
     qbit_port: int = 8080
     qbit_username: str = "admin"
     qbit_password: str = "adminadmin"
+    auto_update: bool = True
+    update_channel: str = "latest"  # 'latest' | 'pre-release'
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -91,6 +93,8 @@ class Settings:
             "qbit_port": self.qbit_port,
             "qbit_username": self.qbit_username,
             "qbit_password": self.qbit_password,
+            "auto_update": self.auto_update,
+            "update_channel": self.update_channel,
         }
 
     @classmethod
@@ -118,6 +122,8 @@ class Settings:
             qbit_port=int(d.get("qbit_port", 8080)),
             qbit_username=d.get("qbit_username", "admin"),
             qbit_password=d.get("qbit_password", "adminadmin"),
+            auto_update=bool(d.get("auto_update", True)),
+            update_channel=d.get("update_channel", "latest"),
         )
 
     # --- Profile mgmt ---

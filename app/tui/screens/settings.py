@@ -2,17 +2,51 @@ from __future__ import annotations
 
 import asyncio
 import shutil
+import sys
 from pathlib import Path
 
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
-from textual.screen import Screen
-from textual.widgets import Button, Footer, Header, Input, Label, ListItem, ListView, Static
+from textual.screen import ModalScreen, Screen
+from textual.widgets import Button, Footer, Header, Input, Label, ListItem, ListView, Select, Static, Switch
 
 from app.config.settings import cache_dir, save_settings
 from app.core.ftp_client import FtpClient
 from app.tui.screens.connection import ConnectionScreen
+
+
+class UpdateConfirmModal(ModalScreen[bool]):
+    """Ask the user to confirm downloading and applying an update."""
+
+    DEFAULT_CSS = """
+    UpdateConfirmModal { align: center middle; }
+    #uc_box {
+        width: 60; height: auto;
+        border: thick $primary; background: $surface; padding: 1 2;
+    }
+    #uc_box Button { width: 100%; margin-top: 1; }
+    #uc_notes { max-height: 8; overflow-y: auto; color: $text-muted; }
+    """
+
+    def __init__(self, tag: str, is_pre: bool, notes: str) -> None:
+        super().__init__()
+        self._tag = tag
+        self._is_pre = is_pre
+        self._notes = notes
+
+    def compose(self) -> ComposeResult:
+        pre_label = " [dim](pre-release)[/]" if self._is_pre else ""
+        with Vertical(id="uc_box"):
+            yield Static(f"[b]Update available: {self._tag}{pre_label}[/b]")
+            if self._notes.strip():
+                yield Static(self._notes.strip()[:400], id="uc_notes")
+            yield Static("\nDownload and install now?")
+            yield Button("Update Now", id="uc_yes", variant="success")
+            yield Button("Later", id="uc_no")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        self.dismiss(event.button.id == "uc_yes")
 
 
 class SettingsScreen(Screen):
@@ -115,6 +149,20 @@ class SettingsScreen(Screen):
                 id="qbit_password",
                 password=True,
             )
+            yield Static("\n[b cyan]Updates[/]")
+            yield Static("[dim]Check GitHub Releases for newer versions of x360tm.[/]")
+            with Horizontal():
+                yield Label("Auto-update on launch  ")
+                yield Switch(value=self.app.settings.auto_update, id="auto_update")
+            yield Static("[dim]Channel[/]")
+            yield Select(
+                options=[("Latest stable", "latest"), ("Pre-release", "pre-release")],
+                value=self.app.settings.update_channel,
+                id="update_channel",
+            )
+            with Horizontal():
+                yield Button("Check for Updates", id="check_updates", variant="primary")
+                yield Static("", id="update_status")
             with Horizontal():
                 yield Button("Save", id="save_settings", variant="success")
                 yield Button("Back", id="back")
@@ -226,6 +274,10 @@ class SettingsScreen(Screen):
                 app.settings.qbit_port = 8080
             app.settings.qbit_username = self.query_one("#qbit_username", Input).value.strip() or "admin"
             app.settings.qbit_password = self.query_one("#qbit_password", Input).value or "adminadmin"
+            app.settings.auto_update = self.query_one("#auto_update", Switch).value
+            sel = self.query_one("#update_channel", Select)
+            if sel.value and sel.value is not Select.BLANK:
+                app.settings.update_channel = str(sel.value)
             save_settings(app.settings)
         elif bid == "refresh_db":
             self.run_worker(self._refresh_db_worker(), exclusive=True)
@@ -239,6 +291,8 @@ class SettingsScreen(Screen):
                 self._refresh_cache_info()
             except Exception:
                 pass
+        elif bid == "check_updates":
+            self.run_worker(self._check_updates_worker(), exclusive=False)
 
     async def _ftp_test_worker(self, prof) -> None:
         client = FtpClient(prof.host, prof.port, prof.username, prof.password)
@@ -275,6 +329,73 @@ class SettingsScreen(Screen):
             self._refresh_cache_info()
         except Exception:
             pass
+
+    async def _check_updates_worker(self) -> None:
+        import app as app_mod
+        from app.core.updater import UpdateInfo, check_for_update, download_update, apply_update, restart_app
+
+        status = self.query_one("#update_status", Static)
+        status.update("[yellow]Checking…[/]")
+        try:
+            channel = self.app.settings.update_channel
+            info: UpdateInfo | None = await check_for_update(channel, app_mod.__version__)
+        except Exception as e:
+            status.update(f"[red]Check failed: {e}[/]")
+            return
+
+        if info is None:
+            status.update("[green]You're up to date![/]")
+            return
+
+        # Source runs can't auto-install — just report
+        if not getattr(sys, "frozen", False):
+            status.update(f"[yellow]{info.tag} available — run 'git pull' to update[/]")
+            return
+
+        status.update(f"[yellow]{info.tag} available[/]")
+        confirmed = await self.app.push_screen_wait(
+            UpdateConfirmModal(info.tag, info.is_prerelease, info.body)
+        )
+        if not confirmed:
+            status.update("")
+            return
+
+        await self._do_update(info, status)
+
+    async def _do_update(self, info, status: Static) -> None:
+        from app.core.updater import download_update, apply_update, restart_app
+
+        def _progress(received: int, total: int) -> None:
+            if total:
+                mb_recv = received // (1024 * 1024)
+                mb_tot = total // (1024 * 1024)
+                status.update(f"[yellow]Downloading… {mb_recv} / {mb_tot} MB[/]")
+            else:
+                status.update(f"[yellow]Downloading… {received // (1024 * 1024)} MB[/]")
+
+        try:
+            archive = await download_update(info, cache_dir(), on_progress=_progress)
+        except Exception as e:
+            status.update(f"[red]Download failed: {e}[/]")
+            return
+
+        status.update("[yellow]Applying update…[/]")
+        try:
+            should_restart = apply_update(archive)
+        except Exception as e:
+            status.update(f"[red]Update failed: {e}[/]")
+            return
+
+        if should_restart:
+            # Linux — binary replaced in-place; re-exec after Textual exits
+            status.update("[green]Update applied! Restarting…[/]")
+            await asyncio.sleep(1)
+            self.app.exit(return_value="restart")
+        else:
+            # Windows — PS1 helper will replace binary and relaunch
+            status.update("[green]Update downloaded! App will restart shortly.[/]")
+            await asyncio.sleep(2)
+            self.app.exit()
 
     def action_back(self) -> None:
         self.app.pop_screen()

@@ -38,6 +38,26 @@ class X360TuiApp(App):
 
     def on_mount(self) -> None:
         self.push_screen(SplashScreen())
+        if self.settings.auto_update:
+            # Delay the background check so the UI has time to draw first
+            self.set_timer(5.0, self._trigger_update_check)
+
+    def _trigger_update_check(self) -> None:
+        self.run_worker(self._auto_update_worker(), exclusive=False)
+
+    async def _auto_update_worker(self) -> None:
+        import app as app_mod
+        from app.core.updater import check_for_update
+        try:
+            info = await check_for_update(self.settings.update_channel, app_mod.__version__)
+            if info:
+                self.notify(
+                    f"[b]{info.tag}[/b] is available — open Settings to install.",
+                    title="Update Available",
+                    timeout=12,
+                )
+        except Exception:
+            pass  # silently ignore network errors on background check
 
     def set_connection_status(self, *, connected: bool, host: str = "") -> None:
         self.connection_status = {
