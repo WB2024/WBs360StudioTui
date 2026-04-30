@@ -280,15 +280,22 @@ The easiest way — no Python required.
 
 1. Go to the [**Releases page**](https://github.com/WB2024/WBs360StudioTui/releases)
 2. Download the binary for your platform:
-   - **Linux** → `x360tm`
+   - **Linux** → `x360tm-linux.tar.gz`
    - **Windows** → `x360tm.exe`
-3. Run it:
 
-**Linux:**
+**Linux — quick run (no install):**
 ```bash
+tar -xzf x360tm-linux.tar.gz
 chmod +x x360tm
 ./x360tm
 ```
+
+**Linux — install to Applications menu:**
+```bash
+tar -xzf x360tm-linux.tar.gz
+./install.sh
+```
+This installs `x360tm` to `~/.local/bin`, adds the icon, and registers it in **Applications → Administration** as *"Xbox360 Mod Manager TUI"*.
 
 **Windows:**
 ```
@@ -296,7 +303,7 @@ chmod +x x360tm
 x360tm.exe
 ```
 
-> The binary is self-contained — all dependencies are bundled. No install, no Python, no venv.
+> The binary is self-contained — all dependencies are bundled. No Python or venv required.
 
 ---
 

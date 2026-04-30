@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Xbox360 Mod Manager TUI
+Comment=Xbox 360 game manager and transfer tool
+Exec=x360tm
+Icon=x360tm
+Terminal=true
+Categories=System;Administration;
+StartupNotify=false

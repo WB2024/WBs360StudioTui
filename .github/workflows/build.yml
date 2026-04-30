@@ -35,8 +35,25 @@ jobs:
       - name: Build
         run: pyinstaller x360tm.spec --noconfirm
 
-      - name: Upload to GitHub Release
+      - name: Bundle Linux release (tar.gz)
+        if: runner.os == 'Linux'
+        run: |
+          mkdir -p release_bundle/Icons
+          cp dist/x360tm release_bundle/x360tm
+          cp install.sh release_bundle/install.sh
+          cp x360tm.desktop release_bundle/x360tm.desktop
+          cp Icons/Icon256.ico release_bundle/Icons/Icon256.ico
+          chmod +x release_bundle/x360tm release_bundle/install.sh
+          tar -czf dist/x360tm-linux.tar.gz -C release_bundle .
+
+      - name: Upload Linux release
         uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/') && runner.os == 'Linux'
         with:
-          files: dist/${{ matrix.artifact }}
+          files: dist/x360tm-linux.tar.gz
+
+      - name: Upload Windows release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/') && runner.os == 'Windows'
+        with:
+          files: dist/x360tm.exe
