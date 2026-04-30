@@ -5,6 +5,9 @@ on:
     tags: ["v*"]
   workflow_dispatch:
 
+permissions:
+  contents: write   # needed to create releases and upload assets
+
 jobs:
   build:
     strategy:
@@ -32,8 +35,8 @@ jobs:
       - name: Build
         run: pyinstaller x360tm.spec --noconfirm
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
         with:
-          name: ${{ matrix.artifact }}
-          path: dist/${{ matrix.artifact }}
+          files: dist/${{ matrix.artifact }}
