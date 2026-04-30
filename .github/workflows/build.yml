@@ -52,8 +52,18 @@ jobs:
         with:
           files: dist/x360tm-linux.tar.gz
 
+      - name: Bundle Windows release (zip)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path release_bundle\Icons | Out-Null
+          Copy-Item dist\x360tm.exe release_bundle\x360tm.exe
+          Copy-Item install.ps1 release_bundle\install.ps1
+          Copy-Item Icons\Icon256.ico release_bundle\Icons\Icon256.ico
+          Compress-Archive -Path release_bundle\* -DestinationPath dist\x360tm-windows.zip
+
       - name: Upload Windows release
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/') && runner.os == 'Windows'
         with:
-          files: dist/x360tm.exe
+          files: dist/x360tm-windows.zip

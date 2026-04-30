@@ -297,11 +297,19 @@ tar -xzf x360tm-linux.tar.gz
 ```
 This installs `x360tm` to `~/.local/bin`, adds the icon, and registers it in **Applications → Administration** as *"Xbox360 Mod Manager TUI"*.
 
-**Windows:**
+**Windows — quick run (no install):**
 ```
-# Double-click x360tm.exe, or from a terminal:
-x360tm.exe
+# Double-click x360tm.exe, or from PowerShell:
+.\x360tm.exe
 ```
+
+**Windows — install to Start Menu:**
+```powershell
+Expand-Archive x360tm-windows.zip -DestinationPath x360tm
+cd x360tm
+.\install.ps1
+```
+This copies `x360tm.exe` to `%LOCALAPPDATA%\Programs\x360tm\`, adds it to your user PATH, and creates a **Start Menu → Administration → Xbox360 Mod Manager TUI** shortcut with the icon.
 
 > The binary is self-contained — all dependencies are bundled. No Python or venv required.
 
