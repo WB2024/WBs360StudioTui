@@ -50,7 +50,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/') && runner.os == 'Linux'
         with:
-          files: dist/x360tm-linux.tar.gz
+          files: |
+            dist/x360tm-linux.tar.gz
+            dist/x360tm
 
       - name: Bundle Windows release (zip)
         if: runner.os == 'Windows'
@@ -66,4 +68,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/') && runner.os == 'Windows'
         with:
-          files: dist/x360tm-windows.zip
+          files: |
+            dist/x360tm-windows.zip
+            dist/x360tm.exe
