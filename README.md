@@ -8,7 +8,8 @@
 [![Textual](https://img.shields.io/badge/TUI-Textual-purple)](https://github.com/Textualize/textual)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey)]()
 [![License](https://img.shields.io/badge/License-MIT-green)]()
-[![Tests](https://img.shields.io/badge/Tests-26%20passing-brightgreen)]()
+[![Tests](https://img.shields.io/badge/Tests-95%20passing-brightgreen)]()
+[![Release](https://img.shields.io/github/v/release/WB2024/WBs360StudioTui?label=Download&color=blue)](https://github.com/WB2024/WBs360StudioTui/releases/latest)
 
 Some data powered by [Arisen Studio](https://arisen.studio) — the largest open Xbox 360 mod database.
 
@@ -271,7 +272,35 @@ Alongside the Arisen Studio online database, x360tm supports **local content fol
 
 ---
 
-## 📦 Install
+## ⬇️ Download (Pre-built Binary)
+
+The easiest way — no Python required.
+
+1. Go to the [**Releases page**](https://github.com/WB2024/WBs360StudioTui/releases)
+2. Download the binary for your platform:
+   - **Linux** → `x360tm`
+   - **Windows** → `x360tm.exe`
+3. Run it:
+
+**Linux:**
+```bash
+chmod +x x360tm
+./x360tm
+```
+
+**Windows:**
+```
+# Double-click x360tm.exe, or from a terminal:
+x360tm.exe
+```
+
+> The binary is self-contained — all dependencies are bundled. No install, no Python, no venv.
+
+---
+
+## 🔧 Run from Source
+
+Prefer to run from the code directly, or want to contribute?
 
 ```bash
 git clone https://github.com/WB2024/WBs360StudioTui
@@ -286,13 +315,6 @@ python -m venv .venv
 source .venv/bin/activate
 
 pip install -r requirements.txt
-```
-
----
-
-## ▶️ Run
-
-```bash
 python main.py
 ```
 
@@ -307,12 +329,17 @@ pytest
 
 ---
 
-## 📦 Build Standalone Executable
+## 🏗️ Build Standalone Executable
+
+To build your own binary from source:
 
 ```bash
 pip install pyinstaller
-pyinstaller --onefile --name x360tm main.py
+pyinstaller x360tm.spec --noconfirm
+# Output: dist/x360tm  (Linux)  or  dist\x360tm.exe  (Windows)
 ```
+
+Builds for both platforms are also produced automatically via GitHub Actions whenever a new version tag is pushed.
 
 ---
 
@@ -395,7 +422,7 @@ Then open **My Library → Scan Library** and all your installed games appear by
 - [X] **Game Torrents (selective download)** — pick files from a `.torrent` and hand them off to qBittorrent
 - [ ] **Library auto-scan on connect** — scan automatically when FTP connection is established
 - [ ] **Web UI** — Make the TUI in webapp Mode so can be accessed from other devices remotley.
-- [ ] **New Game Processing Workflow** — Automatically bacth convert ISOs from download folder to GODs, tidy up and transfer to Console
+- [X] **New Game Processing Workflow** — Automatically batch convert ISOs from download folder to GODs, tidy up and transfer to console
 
 ### Medium-term
 
