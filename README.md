@@ -279,9 +279,9 @@ Alongside the Arisen Studio online database, x360tm supports **local content fol
 The easiest way — no Python required.
 
 1. Go to the [**Releases page**](https://github.com/WB2024/WBs360StudioTui/releases)
-2. Download the binary for your platform:
+2. Download the archive for your platform:
    - **Linux** → `x360tm-linux.tar.gz`
-   - **Windows** → `x360tm.exe`
+   - **Windows** → `x360tm-windows.zip`
 
 **Linux — quick run (no install):**
 ```bash
@@ -298,8 +298,9 @@ tar -xzf x360tm-linux.tar.gz
 This installs `x360tm` to `~/.local/bin`, adds the icon, and registers it in **Applications → Administration** as *"Xbox360 Mod Manager TUI"*.
 
 **Windows — quick run (no install):**
-```
-# Double-click x360tm.exe, or from PowerShell:
+```powershell
+Expand-Archive x360tm-windows.zip -DestinationPath x360tm
+cd x360tm
 .\x360tm.exe
 ```
 
@@ -310,6 +311,8 @@ cd x360tm
 .\install.ps1
 ```
 This copies `x360tm.exe` to `%LOCALAPPDATA%\Programs\x360tm\`, adds it to your user PATH, and creates a **Start Menu → Administration → Xbox360 Mod Manager TUI** shortcut with the icon.
+
+> **Note:** Windows may prompt about running an unsigned script. If so, run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once in PowerShell, then retry.
 
 > The binary is self-contained — all dependencies are bundled. No Python or venv required.
 
