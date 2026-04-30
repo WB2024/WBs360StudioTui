@@ -24,6 +24,7 @@ from app.core.usb_manager import UsbManager
 from app.models.game_save import GameSaveItemData
 from app.models.god_game import GodGameItem
 from app.models.mod_item import DownloadFile, ModItemData
+from app.models.title_update import TitleUpdateItem
 from app.models.trainer import TrainerItem
 
 log = logging.getLogger(__name__)
@@ -333,25 +334,36 @@ class Installer:
         base += f"{game.title_id}/{game.content_type}/"
 
         file_pairs = game.all_files()
-        total = len(file_pairs)
-        if progress:
-            progress("transfer", 0, total)
+        total_files = len(file_pairs)
+        total_bytes = sum(lf.stat().st_size for lf, _ in file_pairs)
+        bytes_done = 0
 
-        for idx, (lf, rel) in enumerate(file_pairs, 1):
+        if progress:
+            progress("transfer", 0, total_bytes)
+
+        for file_idx, (lf, rel) in enumerate(file_pairs, 1):
             remote = base + rel
+            file_size = lf.stat().st_size
+            base_bytes = bytes_done
+
+            def _chunk_cb(sent: int, _unused_total: int, _base: int = base_bytes) -> None:
+                if progress:
+                    progress("transfer", _base + sent, total_bytes)
+
             try:
-                await ftp_client.upload_file(lf, remote)
+                await ftp_client.upload_file(lf, remote, progress_callback=_chunk_cb)
                 result.files_transferred += 1
             except Exception as e:
                 msg = f"Failed: {lf.name} → {remote}: {e}"
                 log.exception(msg)
                 result.errors.append(msg)
+            bytes_done += file_size
             if progress:
-                progress("transfer", idx, total)
+                progress("transfer", bytes_done, total_bytes)
 
         result.success = result.files_transferred > 0 and not result.errors
         result.message = (
-            f"Transferred {result.files_transferred} of {total} file(s)" if result.success
+            f"Transferred {result.files_transferred} of {total_files} file(s)" if result.success
             else "; ".join(result.errors) if result.errors
             else "Nothing transferred"
         )
@@ -379,12 +391,16 @@ class Installer:
         base += f"{game.title_id}/{game.content_type}/"
 
         file_pairs = game.all_files()
-        total = len(file_pairs)
-        if progress:
-            progress("transfer", 0, total)
+        total_files = len(file_pairs)
+        total_bytes = sum(lf.stat().st_size for lf, _ in file_pairs)
+        bytes_done = 0
 
-        for idx, (lf, rel) in enumerate(file_pairs, 1):
+        if progress:
+            progress("transfer", 0, total_bytes)
+
+        for file_idx, (lf, rel) in enumerate(file_pairs, 1):
             remote = base + rel
+            file_size = lf.stat().st_size
             try:
                 dest = map_xbox_path_to_usb(remote, usb_root)
                 await asyncio.to_thread(usb_mgr.copy_file, lf, dest)
@@ -393,13 +409,113 @@ class Installer:
                 msg = f"Failed: {lf.name}: {e}"
                 log.exception(msg)
                 result.errors.append(msg)
+            bytes_done += file_size
             if progress:
-                progress("transfer", idx, total)
+                progress("transfer", bytes_done, total_bytes)
 
         result.success = result.files_transferred > 0 and not result.errors
         result.message = (
-            f"Copied {result.files_transferred} of {total} file(s)" if result.success
+            f"Copied {result.files_transferred} of {total_files} file(s)" if result.success
             else "; ".join(result.errors) if result.errors
             else "Nothing transferred"
+        )
+        return result
+
+    # ------------------------------------------------------------------
+    # Title Update transfer
+    # ------------------------------------------------------------------
+
+    async def install_title_update_via_ftp(
+        self,
+        tu: TitleUpdateItem,
+        ftp_client: FtpClient,
+        game_drive: str = "Usb1",
+        progress: Optional[StageProgress] = None,
+    ) -> InstallResult:
+        """Transfer a Title Update STFS package to the console via FTP.
+
+        The TU is placed at the standard Xbox 360 content path:
+          /{game_drive}/Content/0000000000000000/{TitleID}/000B0000/{filename}
+        """
+        result = InstallResult(success=False)
+
+        if not ftp_client.is_connected:
+            try:
+                await ftp_client.connect()
+            except Exception as e:
+                result.message = f"FTP connect failed: {e}"
+                return result
+
+        remote_path = (
+            f"/{game_drive}/Content/0000000000000000"
+            f"/{tu.title_id}/000B0000/{tu.filename}"
+        )
+        total_bytes = tu.size_bytes
+
+        if progress:
+            progress("transfer", 0, total_bytes)
+
+        def _chunk_cb(sent: int, _total: int) -> None:
+            if progress:
+                progress("transfer", sent, total_bytes)
+
+        try:
+            await ftp_client.upload_file(tu.local_path, remote_path, progress_callback=_chunk_cb)
+            result.files_transferred = 1
+        except Exception as e:
+            msg = f"Failed to upload {tu.filename}: {e}"
+            log.exception(msg)
+            result.errors.append(msg)
+
+        if progress:
+            progress("transfer", total_bytes, total_bytes)
+
+        result.success = result.files_transferred > 0 and not result.errors
+        result.message = (
+            f"Title Update installed to {remote_path}" if result.success
+            else "; ".join(result.errors)
+        )
+        return result
+
+    async def install_title_update_via_usb(
+        self,
+        tu: TitleUpdateItem,
+        usb_root: str,
+        game_drive: str = "Usb1",
+        progress: Optional[StageProgress] = None,
+        usb_manager: Optional[UsbManager] = None,
+    ) -> InstallResult:
+        """Copy a Title Update STFS package to a USB drive.
+
+        The TU is placed at:
+          {usb_root}/Content/0000000000000000/{TitleID}/000B0000/{filename}
+        """
+        usb_mgr = usb_manager or UsbManager()
+        result = InstallResult(success=False)
+
+        # Build destination path on the USB mount
+        dest_rel = f"Content/0000000000000000/{tu.title_id}/000B0000/{tu.filename}"
+        dest = Path(usb_root) / dest_rel
+        total_bytes = tu.size_bytes
+
+        if progress:
+            progress("transfer", 0, total_bytes)
+
+        try:
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            await asyncio.to_thread(shutil.copy2, tu.local_path, dest)
+            result.files_transferred = 1
+        except Exception as e:
+            msg = f"Failed to copy {tu.filename}: {e}"
+            log.exception(msg)
+            result.errors.append(msg)
+
+        if progress:
+            progress("transfer", total_bytes, total_bytes)
+
+        result.success = result.files_transferred > 0 and not result.errors
+        result.message = (
+            f"Title Update copied to {dest}" if result.success
+            else "; ".join(result.errors)
         )
         return result

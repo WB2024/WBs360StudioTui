@@ -17,6 +17,7 @@ from app.tui.screens.ftp_browser import FtpBrowserScreen
 from app.tui.screens.pipeline import NewGamePipelineScreen
 from app.tui.screens.settings import SettingsScreen
 from app.tui.screens.trainers import TrainersScreen
+from app.tui.screens.title_updates import TitleUpdatesScreen
 from app.tui.screens.transfer_games import TransferGamesScreen
 from app.tui.screens.torrent_picker import TorrentPickerScreen
 from app.tui.screens.utilities import UtilitiesScreen
@@ -41,6 +42,7 @@ class MainMenuScreen(Screen):
                 yield Button("Game Saves", id="m_gs", classes="menu_button")
                 yield Button("Game Cheats", id="m_gc", classes="menu_button")
                 yield Button("Game Patches", id="m_gp", classes="menu_button")
+                yield Button("Title Updates", id="m_tu", classes="menu_button", variant="warning")
                 yield Button("Transfer Games", id="m_tg", classes="menu_button", variant="warning")
                 yield Button("ISO → GOD", id="m_iso", classes="menu_button", variant="warning")
                 yield Button("Game Torrents", id="m_tor", classes="menu_button", variant="warning")
@@ -80,6 +82,7 @@ class MainMenuScreen(Screen):
             "m_gs": GameSavesScreen,
             "m_gc": GameCheatsScreen,
             "m_gp": GamePatchesScreen,
+            "m_tu": TitleUpdatesScreen,
             "m_tg": TransferGamesScreen,
             "m_iso": Iso2GodScreen,
             "m_tor": TorrentPickerScreen,
