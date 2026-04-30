@@ -1,6 +1,7 @@
 """Top-level Textual App."""
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 from textual.app import App
@@ -18,6 +19,14 @@ class X360TuiApp(App):
     TITLE = "x360tm"
 
     def __init__(self) -> None:
+        # When running as a PyInstaller bundle, CSS_PATH is resolved relative
+        # to this file via inspect.getfile().  In a frozen onefile executable
+        # the source is not on disk, so we set _BASE_PATH explicitly to the
+        # location of this module inside _MEIPASS.
+        if getattr(sys, "frozen", False):
+            self._BASE_PATH = str(
+                Path(sys._MEIPASS) / "app" / "tui" / "app.py"  # type: ignore[attr-defined]
+            )
         super().__init__()
         setup_logging()
         self.settings: Settings = load_settings()
