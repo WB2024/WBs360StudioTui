@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="Logo.png" alt="x360tm logo" width="320">
+
 # 🎮 x360tm — Xbox 360 Mod Manager TUI
 
 **A powerful, keyboard-driven terminal app for browsing, managing, and installing Xbox 360 mods directly from your console.**
