@@ -114,6 +114,33 @@ class RenameModal(ModalScreen[str | None]):
         self.dismiss(None)
 
 
+class NewFolderModal(ModalScreen[str | None]):
+    """Prompt for a new folder name to create in the current directory."""
+
+    BINDINGS = [("escape", "cancel", "Cancel")]
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="newfolder_box"):
+            yield Static("[b]New Folder[/b]", id="newfolder_title")
+            yield Input(placeholder="Folder name", id="newfolder_input")
+            with Horizontal(id="newfolder_btns"):
+                yield Button("Create", id="newfolder_ok", variant="primary")
+                yield Button("Cancel", id="newfolder_cancel")
+
+    def on_mount(self) -> None:
+        self.query_one("#newfolder_input", Input).focus()
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "newfolder_ok":
+            name = self.query_one("#newfolder_input", Input).value.strip()
+            self.dismiss(name or None)
+        else:
+            self.dismiss(None)
+
+    def action_cancel(self) -> None:
+        self.dismiss(None)
+
+
 # ---------------------------------------------------------------------------
 # Main screen
 # ---------------------------------------------------------------------------
@@ -134,6 +161,7 @@ class FtpBrowserScreen(Screen):
     BINDINGS = [
         Binding("escape", "back", "Back", show=True),
         Binding("backspace", "go_up", "Up", show=True),
+        Binding("n", "new_folder", "New Folder", show=True),
         Binding("r", "rename", "Rename", show=True),
         Binding("d", "delete", "Delete", show=True),
         Binding("f5", "refresh", "Refresh", show=True),
@@ -154,6 +182,7 @@ class FtpBrowserScreen(Screen):
         yield Static("  📂 [b cyan]/[/b cyan]", id="fb_path_bar")
         with Horizontal(id="fb_toolbar"):
             yield Button("↑ Up", id="fb_up_btn")
+            yield Button("New Folder [N]", id="fb_newfolder_btn", variant="success")
             yield Button("Rename [R]", id="fb_rename_btn")
             yield Button("Delete [D]", id="fb_delete_btn", variant="error")
             yield Button("Refresh [F5]", id="fb_refresh_btn")
@@ -253,6 +282,7 @@ class FtpBrowserScreen(Screen):
     def on_button_pressed(self, event: Button.Pressed) -> None:
         mapping = {
             "fb_up_btn": self.action_go_up,
+            "fb_newfolder_btn": self.action_new_folder,
             "fb_rename_btn": self.action_rename,
             "fb_delete_btn": self.action_delete,
             "fb_refresh_btn": self.action_refresh,
@@ -292,6 +322,29 @@ class FtpBrowserScreen(Screen):
 
     async def action_refresh(self) -> None:
         await self._list_path(self._path)
+
+    def action_new_folder(self) -> None:
+        self.app.push_screen(
+            NewFolderModal(),
+            callback=lambda name: self._do_new_folder(name),
+        )
+
+    def _do_new_folder(self, name: str | None) -> None:
+        if not name:
+            return
+        asyncio.ensure_future(self._new_folder_worker(name))
+
+    async def _new_folder_worker(self, name: str) -> None:
+        if not self._client:
+            self._set_status("Not connected.")
+            return
+        new_path = self._join(name)
+        self._set_status(f"Creating folder {name}…")
+        try:
+            await self._client.make_directory(new_path)
+            await self._list_path(self._path)
+        except FtpTransferError as e:
+            self._set_status(f"Create folder failed: {e}")
 
     def action_rename(self) -> None:
         entry = self._selected_entry()
