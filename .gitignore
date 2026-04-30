@@ -22,6 +22,7 @@ build/
 htmlcov/
 
 # PyInstaller
+# *.spec intentionally NOT ignored — x360tm.spec is committed to the repo
 *.manifest
 
 # Logs
