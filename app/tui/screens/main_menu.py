@@ -20,6 +20,7 @@ from app.tui.screens.trainers import TrainersScreen
 from app.tui.screens.title_updates import TitleUpdatesScreen
 from app.tui.screens.transfer_games import TransferGamesScreen
 from app.tui.screens.torrent_picker import TorrentPickerScreen
+from app.tui.screens.bad_avatar import BadAvatarScreen
 from app.tui.screens.utilities import UtilitiesScreen
 from app.tui.widgets.connection_bar import ConnectionBar
 
@@ -50,6 +51,7 @@ class MainMenuScreen(Screen):
                 yield Button("FTP File Browser", id="m_ftp", classes="menu_button", variant="warning")
                 yield Button("Utilities", id="m_utils", classes="menu_button")
                 yield Button("Settings", id="m_set", classes="menu_button")
+                yield Button("Create BadAvatar USB", id="m_badavatar", classes="menu_button", variant="error")
                 yield Button("Quit", id="m_quit", classes="menu_button", variant="error")
         yield Footer()
 
@@ -90,6 +92,7 @@ class MainMenuScreen(Screen):
             "m_ftp": FtpBrowserScreen,
             "m_utils": UtilitiesScreen,
             "m_set": SettingsScreen,
+            "m_badavatar": BadAvatarScreen,
         }
         cls = m.get(event.button.id)
         if cls:

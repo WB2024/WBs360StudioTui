@@ -55,5 +55,10 @@ x360tm
 
 # USB backup images (local only, not committed)
 USBBackups/
+
+# ABadAvatar source files (local only — too large for git, copyright-restricted)
+BadAvatarFiles/
+
 DEVNOTES.md
 USB_BACKUP_RESTORE_SPEC.md
+BADAVATAR_USB_SPEC.md
