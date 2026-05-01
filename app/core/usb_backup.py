@@ -736,10 +736,17 @@ async def restore_backup(
         os.close(pipe_w)
         pipe_w = -1
 
-        partclone_proc = await asyncio.create_subprocess_exec(
+        partclone_cmd = [
             "sudo", "-n", _tool_path("partclone.fat"),
             "--restore",
             "--output", partition,
+        ]
+        # -C disables the source-vs-target partition size check.
+        # Safe here because check_restore_compat() already verified used_bytes fits.
+        if mode == RestoreMode.SHRINK:
+            partclone_cmd.append("-C")
+        partclone_proc = await asyncio.create_subprocess_exec(
+            *partclone_cmd,
             stdin=pipe_r,
             stdout=asyncio.subprocess.DEVNULL,
             stderr=asyncio.subprocess.PIPE,
