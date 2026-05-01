@@ -1,5 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+import os
 from PyInstaller.utils.hooks import collect_data_files, copy_metadata
 
 # ── Data files ────────────────────────────────────────────────────────────────
@@ -20,6 +21,11 @@ datas += [("app/tui/styles/app.tcss", "app/tui/styles")]
 # app/tui/screens/*.py or 3 levels up from app/core/*.py) resolve to _MEIPASS
 # root, so placing the file there makes them all work unchanged.
 datas += [("gamelist_xbox360.csv", ".")]
+
+# BadAvatarFiles — only bundled when present locally (gitignored; copyright-
+# restricted). CI builds omit this; local builds include it automatically.
+if os.path.isdir("BadAvatarFiles"):
+    datas += [("BadAvatarFiles", "BadAvatarFiles")]
 
 a = Analysis(
     ['main.py'],
