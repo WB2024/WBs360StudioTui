@@ -327,9 +327,10 @@ async def _get_partclone_version() -> str:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        _, stderr = await asyncio.wait_for(proc.communicate(), timeout=5)
-        text = stderr.decode("utf-8", errors="replace")
-        m = re.search(r"(\d+\.\d+[\.\d]*)", text)
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=5)
+        # partclone writes version to stdout
+        text = stdout.decode("utf-8", errors="replace") or stderr.decode("utf-8", errors="replace")
+        m = re.search(r"v?(\d+\.\d+[.\d]*)", text)
         return m.group(1) if m else "unknown"
     except Exception:
         return "unknown"
@@ -340,17 +341,33 @@ async def _get_partclone_version() -> str:
 # ---------------------------------------------------------------------------
 
 async def query_used_bytes(partition: str) -> int:
-    """Run 'partclone.fat --info' and parse used block count × block size."""
+    """Return used bytes on the partition. Uses df (fast, no sudo) if mounted, else partclone --info."""
+    # Try df first — works on a mounted filesystem, no sudo needed
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "df", "-B1", "--output=used", partition,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=10)
+        lines = stdout.decode("utf-8", errors="replace").strip().splitlines()
+        # Output is header + value, e.g.: "     Used\n1234567890"
+        for line in reversed(lines):
+            stripped = line.strip()
+            if stripped.isdigit():
+                return int(stripped)
+    except Exception as e:
+        log.warning("df query_used_bytes failed (%s), falling back to partclone --info", e)
+
+    # Fallback: partclone --info reads raw device (works unmounted, needs sudo)
     proc = await asyncio.create_subprocess_exec(
         "sudo", "-n", _tool_path("partclone.fat"), "--info", "--source", partition,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
-    _, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
-    output = stderr.decode("utf-8", errors="replace") + proc.stdout and b"" or b""
-
+    stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
     # partclone --info writes to stderr
-    text = stderr.decode("utf-8", errors="replace")
+    text = stderr.decode("utf-8", errors="replace") + stdout.decode("utf-8", errors="replace")
 
     used_blocks = 0
     block_size = 512
@@ -477,19 +494,19 @@ async def create_backup(
 
     partclone_version = await _get_partclone_version()
 
-    # Step 1: unmount if mounted (partclone refuses to clone mounted filesystems)
-    progress_cb(0.0, "Checking mount status…")
-    mountpoint = await _unmount_device(device.partition)
-    if mountpoint:
-        progress_cb(1.0, f"Unmounted {device.partition} from {mountpoint}")
-
-    # Step 2: query used bytes
-    progress_cb(1.5, "Querying partition usage…")
+    # Step 1: query used bytes while device is still mounted (df is most reliable)
+    progress_cb(0.0, "Querying partition usage…")
     try:
         used_bytes = await query_used_bytes(device.partition)
     except Exception as e:
         log.warning("query_used_bytes failed (%s), continuing with 0", e)
         used_bytes = 0
+
+    # Step 2: unmount if mounted (partclone refuses to clone mounted filesystems)
+    progress_cb(1.0, "Checking mount status…")
+    mountpoint = await _unmount_device(device.partition)
+    if mountpoint:
+        progress_cb(1.5, f"Unmounted {device.partition} from {mountpoint}")
 
     # Step 3: get partition start offset via parted
     partition_start = await _get_partition_start_bytes(device.device, device.partition)
@@ -679,20 +696,30 @@ async def restore_backup(
     if mode == RestoreMode.SHRINK:
         # Repartition the target device to a fresh MBR + single FAT32 partition
         progress_cb(2.0, f"Repartitioning {device}…")
+        parted = _tool_path("parted")
         await _run_sudo_cmd(
-            ["parted", "-s", device, "mklabel", "msdos"],
+            [parted, "-s", device, "mklabel", "msdos"],
             "parted mklabel",
         )
         await _run_sudo_cmd(
-            ["parted", "-s", device, "mkpart", "primary", "fat32", "1MiB", "100%"],
+            [parted, "-s", device, "mkpart", "primary", "fat32", "1MiB", "100%"],
             "parted mkpart",
         )
         await _run_sudo_cmd(
-            ["parted", "-s", device, "set", "1", "boot", "on"],
+            [parted, "-s", device, "set", "1", "boot", "on"],
             "parted set boot",
         )
-        # After repartition the partition node may need a moment to appear
-        await asyncio.sleep(1)
+        # Flush kernel partition table so /dev/sdc1 node is ready before partclone
+        try:
+            await _run_sudo_cmd(["partprobe", device], "partprobe")
+        except Exception:
+            pass  # non-fatal, udevadm settle below is the safety net
+        proc_settle = await asyncio.create_subprocess_exec(
+            "udevadm", "settle", "--timeout=10",
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        await asyncio.wait_for(proc_settle.wait(), timeout=15)
         progress_cb(8.0, "Repartition complete.")
 
     # Restore the image
@@ -747,13 +774,14 @@ async def restore_backup(
         partclone_proc.wait(),
     )
 
-    if zstd_proc.returncode != 0:
-        raise RuntimeError(f"zstd decompression failed (exit {zstd_proc.returncode}).")
+    # Check partclone first — if it fails, zstd gets SIGPIPE (-13) which is misleading
     if partclone_proc.returncode != 0:
         tail = "\n".join(partclone_err_lines[-10:])
         raise RuntimeError(
             f"partclone.fat restore failed (exit {partclone_proc.returncode}).\n{tail}"
         )
+    if zstd_proc.returncode != 0:
+        raise RuntimeError(f"zstd decompression failed (exit {zstd_proc.returncode}).")
 
     # Resize FAT32 filesystem to fill the (possibly new/different) partition
     progress_cb(92.0, "Resizing filesystem…")
