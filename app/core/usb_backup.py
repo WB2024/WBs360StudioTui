@@ -797,22 +797,41 @@ async def restore_backup(
         # Target is larger: expand partition first
         try:
             await _run_sudo_cmd(
-                ["parted", "-s", device, "resizepart", "1", "100%"],
+                [_tool_path("parted"), "-s", device, "resizepart", "1", "100%"],
                 "parted resizepart",
             )
         except RuntimeError as e:
             log.warning("parted resizepart failed (non-fatal): %s", e)
 
-    try:
-        await _run_sudo_cmd(
-            ["fatresize", "-s", "max", partition],
-            "fatresize",
-        )
-        progress_cb(98.0, "Filesystem resized.")
-    except RuntimeError as e:
-        # fatresize failure is non-fatal — warn but don't abort
-        log.warning("fatresize failed (non-fatal): %s", e)
-        progress_cb(98.0, f"[yellow]Warning: fatresize failed — {e}[/]")
+    if mode == RestoreMode.SHRINK:
+        # After a -C (size-bypassed) restore the FAT32 BPB still contains the original
+        # total_sectors from the larger source partition.  fatresize refuses to run when
+        # FS > volume.  fsck.fat -a rewrites total_sectors to match the real partition
+        # size so fatresize can proceed.
+        fsckfat = _find_tool("fsck.fat")
+        if fsckfat:
+            try:
+                progress_cb(93.0, "Correcting filesystem headers…")
+                await _run_sudo_cmd([fsckfat, "-a", "-w", partition], "fsck.fat")
+            except RuntimeError as e:
+                log.warning("fsck.fat pre-resize (non-fatal): %s", e)
+        else:
+            log.warning("fsck.fat not found — skipping pre-resize header fix")
+
+    fatresize_bin = _find_tool("fatresize")
+    if fatresize_bin:
+        try:
+            await _run_sudo_cmd(
+                [fatresize_bin, "-s", "max", partition],
+                "fatresize",
+            )
+            progress_cb(98.0, "Filesystem resized.")
+        except RuntimeError as e:
+            # fatresize failure is non-fatal — warn but don't abort
+            log.warning("fatresize failed (non-fatal): %s", e)
+            progress_cb(98.0, f"[yellow]Warning: fatresize failed — {e}[/]")
+    else:
+        log.warning("fatresize not found — skipping filesystem resize")
 
     progress_cb(100.0, "Restore complete.")
 
