@@ -20,6 +20,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import re
 import shutil
 import sys
@@ -41,6 +42,21 @@ _OS_MOUNTPOINTS = {"/", "/boot", "/boot/efi", "/home", "/usr", "/var", "/run/sys
 
 # Required external tools
 REQUIRED_TOOLS = ["partclone.fat", "zstd", "parted", "fatresize"]
+
+# Extra directories to search when shutil.which misses tools in /usr/sbin
+_SBIN_DIRS = ["/usr/sbin", "/sbin", "/usr/local/sbin"]
+
+
+def _find_tool(name: str) -> str | None:
+    """Like shutil.which but also checks sbin directories not always in PATH."""
+    found = shutil.which(name)
+    if found:
+        return found
+    for d in _SBIN_DIRS:
+        candidate = Path(d) / name
+        if candidate.is_file() and os.access(candidate, os.X_OK):
+            return str(candidate)
+    return None
 
 # Overhead multiplier: target must be >= used_bytes * this factor
 _OVERHEAD_FACTOR = 1.05
@@ -128,7 +144,7 @@ def check_platform() -> bool:
 
 def check_dependencies() -> dict[str, bool]:
     """Return a mapping of tool → available for all required tools."""
-    return {tool: shutil.which(tool) is not None for tool in REQUIRED_TOOLS}
+    return {tool: _find_tool(tool) is not None for tool in REQUIRED_TOOLS}
 
 
 def all_dependencies_present() -> bool:
@@ -154,8 +170,22 @@ def get_backup_dir(settings) -> Path:
 # Device detection
 # ---------------------------------------------------------------------------
 
+def _is_removable(rm_val) -> bool:
+    """Handle rm field from lsblk JSON which may be bool, int, or string."""
+    if isinstance(rm_val, bool):
+        return rm_val
+    return str(rm_val) in ("1", "true")
+
+
 def detect_removable_devices() -> list[BlockDevice]:
-    """Run lsblk -J and return safe removable devices with FAT partitions."""
+    """Run lsblk -J and return safe removable devices with FAT filesystems.
+
+    Handles two layouts:
+      - Partitioned disk: sdc → sdc1 (children of type 'part')
+      - Partitionless disk: FAT32 written directly to sdc with no partition table
+        (common for BadBuilder USB sticks; lsblk shows the disk itself with a
+        fstype but no children)
+    """
     import subprocess
     try:
         result = subprocess.run(
@@ -178,10 +208,42 @@ def detect_removable_devices() -> list[BlockDevice]:
     for disk in block_devices:
         if disk.get("type") != "disk":
             continue
-        if str(disk.get("rm", "0")) not in ("1", "true", True):
+        if not _is_removable(disk.get("rm", 0)):
             continue
 
+        # Skip empty devices (card slots with no media)
+        try:
+            disk_bytes = int(disk.get("size") or 0)
+        except (ValueError, TypeError):
+            disk_bytes = 0
+        if disk_bytes == 0:
+            continue
+
+        device_path = f"/dev/{disk['name']}"
         children = disk.get("children") or []
+
+        # --- Partitionless disk (FAT written directly to the raw device) ---
+        if not children:
+            fs = (disk.get("fstype") or "").lower()
+            if not fs:
+                continue  # unformatted / unreadable
+            mp = disk.get("mountpoint") or None
+            if mp and _is_os_mountpoint(mp):
+                continue
+            label = disk.get("label") or ""
+            devices.append(BlockDevice(
+                device=device_path,
+                partition=device_path,  # device == partition for partitionless
+                label=label,
+                filesystem=fs,
+                total_bytes=disk_bytes,
+                partition_bytes=disk_bytes,
+                mountpoint=mp,
+                is_suggested=(label.upper() == BADUPDATE_LABEL),
+            ))
+            continue
+
+        # --- Partitioned disk: inspect each partition ---
         for part in children:
             if part.get("type") != "part":
                 continue
@@ -189,25 +251,17 @@ def detect_removable_devices() -> list[BlockDevice]:
             mp = part.get("mountpoint") or None
             fs = (part.get("fstype") or "").lower()
             label = part.get("label") or ""
-            size_str = part.get("size") or "0"
 
-            # Skip if any dangerous mountpoint is in use
-            if mp and (_is_os_mountpoint(mp)):
+            if mp and _is_os_mountpoint(mp):
                 continue
 
             try:
-                part_bytes = int(size_str)
+                part_bytes = int(part.get("size") or 0)
             except (ValueError, TypeError):
                 part_bytes = 0
 
-            disk_size_str = disk.get("size") or "0"
-            try:
-                disk_bytes = int(disk_size_str)
-            except (ValueError, TypeError):
-                disk_bytes = part_bytes
-
             devices.append(BlockDevice(
-                device=f"/dev/{disk['name']}",
+                device=device_path,
                 partition=f"/dev/{part['name']}",
                 label=label,
                 filesystem=fs,

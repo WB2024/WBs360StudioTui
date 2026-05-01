@@ -258,48 +258,39 @@ class UsbBackupScreen(Screen):
 # ---------------------------------------------------------------------------
 
 class _InstallDepsScreen(Screen):
-    """Runs 'sudo apt install partclone zstd parted fatresize' and shows output."""
+    """Shows the install command — user must run it in a terminal."""
 
-    TITLE = "Installing Dependencies"
+    TITLE = "Install Dependencies"
     BINDINGS = [Binding("escape", "back", "Back")]
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=False)
         with VerticalScroll():
-            yield Static("[b]Installing: partclone zstd parted fatresize[/]")
-            yield Static("[dim]This may take a minute…[/]", id="install_status")
-            yield RichLog(id="install_log", highlight=False, markup=True, wrap=True)
-            yield Button("Back", id="inst_back", disabled=True)
+            yield Static("[b]Install Required Tools[/b]")
+            yield Static(
+                "\nRun this command in a terminal, then come back and press [b]Re-check[/b]:"
+            )
+            yield Static(
+                "\n[bold]  sudo apt install partclone zstd parted fatresize[/bold]\n"
+            )
+            yield Static(
+                "[dim]Note: on some systems partclone.fat may live in /usr/sbin — "
+                "if the re-check still shows it missing, try:\n"
+                "  ls /usr/sbin/partclone.fat[/dim]"
+            )
+            with Horizontal():
+                yield Button("Re-check", id="inst_recheck", variant="primary")
+                yield Button("Back [Esc]", id="inst_back")
         yield Footer()
-
-    def on_mount(self) -> None:
-        self.run_worker(self._install_worker(), exclusive=True)
-
-    async def _install_worker(self) -> None:
-        log_widget = self.query_one("#install_log", RichLog)
-        status = self.query_one("#install_status", Static)
-
-        proc = await asyncio.create_subprocess_exec(
-            "sudo", "apt", "install", "-y",
-            "partclone", "zstd", "parted", "fatresize",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT,
-        )
-        assert proc.stdout is not None
-        async for raw in proc.stdout:
-            log_widget.write(raw.decode("utf-8", errors="replace").rstrip())
-
-        await proc.wait()
-        if proc.returncode == 0:
-            status.update("[green]Installation complete. Press Back to return.[/]")
-        else:
-            status.update(f"[red]Installation failed (exit {proc.returncode}). Try running manually in a terminal.[/]")
-
-        self.query_one("#inst_back", Button).disabled = False
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "inst_back":
             self.app.pop_screen()
+        elif event.button.id == "inst_recheck":
+            # Pop install screen, pop hub, push fresh hub so dep check reruns
+            self.app.pop_screen()
+            self.app.pop_screen()
+            self.app.push_screen(UsbBackupScreen())
 
     def action_back(self) -> None:
         self.app.pop_screen()
@@ -327,7 +318,10 @@ class CreateBackupScreen(Screen):
             yield Static("[b cyan]Create USB Backup[/]")
             yield Static("[dim]Select the USB device to back up.[/]")
             yield Static(
-                "[yellow]⚠ Requires sudo. You may be prompted for your password.[/]",
+                "[yellow]⚠ The backup operation requires sudo. When you press "
+                "Back Up Selected Device, a sudo password prompt will appear "
+                "in the terminal where you launched x360tm — switch to it and "
+                "enter your password if prompted.[/]",
                 id="cb_sudo_warn",
             )
             yield DataTable(id="device_table", cursor_type="row")
