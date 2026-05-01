@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 import platform
 import re
+import shutil
 import sys
 import tarfile
 import tempfile
@@ -148,8 +149,17 @@ def _apply_linux(archive: Path) -> None:
         if not new_bin.exists():
             raise FileNotFoundError("x360tm binary not found in archive")
         new_bin.chmod(0o755)
-        # os.replace is atomic and works even on a running ELF on Linux
-        os.replace(new_bin, exe)
+        # Stage in the same directory as the exe so the rename is on the
+        # same filesystem — os.replace (rename) fails across devices (EXDEV)
+        # which is common when /tmp is tmpfs and the binary lives on ext4.
+        stage = exe.with_name(f".x360tm_update_{os.getpid()}")
+        try:
+            shutil.copy2(new_bin, stage)
+            stage.chmod(0o755)
+            os.replace(stage, exe)
+        except Exception:
+            stage.unlink(missing_ok=True)
+            raise
 
 
 def _apply_windows(archive: Path) -> None:
