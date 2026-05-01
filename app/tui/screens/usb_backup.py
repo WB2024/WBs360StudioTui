@@ -8,10 +8,8 @@ panel is shown and no operations are permitted.
 """
 from __future__ import annotations
 
-import asyncio
 import time
 from pathlib import Path
-from typing import Callable
 
 from textual.app import ComposeResult
 from textual.binding import Binding
@@ -423,13 +421,10 @@ class CreateBackupScreen(Screen):
         status = self.query_one("#cb_status", Static)
 
         def _progress(pct: float, msg: str) -> None:
-            self.call_from_thread(panel.update_progress, pct, msg)
+            panel.update_progress(pct, msg)
 
         try:
-            meta = await asyncio.get_event_loop().run_in_executor(
-                None,
-                lambda: asyncio.run(_do_backup(dev, backup_dir, _progress)),
-            )
+            meta = await create_backup(dev, backup_dir, _progress)
             panel.stop_timer()
             panel.update_progress(100.0, "[green]✓ Backup complete![/]")
             img_size = (backup_dir / meta.image_file).stat().st_size / (1024 ** 3)
@@ -449,11 +444,6 @@ class CreateBackupScreen(Screen):
     def action_back(self) -> None:
         if not self._in_progress:
             self.app.pop_screen()
-
-
-async def _do_backup(dev: BlockDevice, backup_dir: Path, progress_cb: Callable) -> BackupMeta:
-    """Async wrapper called from run_in_executor context."""
-    return await create_backup(dev, backup_dir, progress_cb)
 
 
 # ---------------------------------------------------------------------------
@@ -670,15 +660,10 @@ class RestoreBackupScreen(Screen):
             return
 
         def _progress(pct: float, msg: str) -> None:
-            self.call_from_thread(panel.update_progress, pct, msg)
+            panel.update_progress(pct, msg)
 
         try:
-            await asyncio.get_event_loop().run_in_executor(
-                None,
-                lambda: asyncio.run(
-                    restore_backup(meta, image_path, dev, _progress)
-                ),
-            )
+            await restore_backup(meta, image_path, dev, _progress)
             panel.stop_timer()
             panel.update_progress(100.0, "[green]✓ Restore complete![/]")
             status.update(
