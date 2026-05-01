@@ -33,6 +33,7 @@ from app.core.usb_backup import (
     get_backup_dir,
     list_backups,
     restore_backup,
+    sudo_authenticate,
 )
 from app.tui.widgets.connection_bar import ConnectionBar
 from app.tui.widgets.status_bar import StatusBar
@@ -58,6 +59,48 @@ _CSS = """
 #confirm_modal_box { width: 70; height: auto; padding: 1 2; border: thick $error; background: $surface; }
 #confirm_modal_box Button { width: 100%; margin-top: 1; }
 """
+
+
+# ---------------------------------------------------------------------------
+# Sudo password modal
+# ---------------------------------------------------------------------------
+
+class SudoPasswordModal(ModalScreen[str | None]):
+    """Collect sudo password from the user within the TUI."""
+
+    DEFAULT_CSS = """
+    SudoPasswordModal { align: center middle; }
+    #sudo_box { width: 60; height: auto; padding: 1 2;
+                border: thick $warning; background: $surface; }
+    #sudo_box Input  { margin-top: 1; }
+    #sudo_box Button { width: 100%; margin-top: 1; }
+    """
+
+    BINDINGS = [("escape", "cancel", "Cancel")]
+
+    def compose(self) -> ComposeResult:
+        from textual.widgets import Input
+        with Vertical(id="sudo_box"):
+            yield Static("[b yellow]⚠ Sudo Authentication Required[/]")
+            yield Static(
+                "\nBlock-level operations require root access. "
+                "Enter your sudo password to continue."
+            )
+            yield Input(placeholder="sudo password", password=True, id="sudo_pw")
+            with Horizontal():
+                yield Button("Authenticate", id="sudo_ok", variant="warning")
+                yield Button("Cancel", id="sudo_cancel")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "sudo_ok":
+            from textual.widgets import Input
+            pw = self.query_one("#sudo_pw", Input).value
+            self.dismiss(pw)
+        else:
+            self.dismiss(None)
+
+    def action_cancel(self) -> None:
+        self.dismiss(None)
 
 
 # ---------------------------------------------------------------------------
@@ -410,6 +453,10 @@ class CreateBackupScreen(Screen):
         if not confirmed:
             return
 
+        # --- Sudo pre-authentication ---
+        if not await self._sudo_preauth():
+            return
+
         self._in_progress = True
         self.query_one("#cb_start", Button).disabled = True
         self.query_one("#cb_refresh", Button).disabled = True
@@ -444,6 +491,20 @@ class CreateBackupScreen(Screen):
     def action_back(self) -> None:
         if not self._in_progress:
             self.app.pop_screen()
+
+    async def _sudo_preauth(self) -> bool:
+        """Collect password via modal and pre-authenticate sudo. Returns False if cancelled."""
+        status = self.query_one("#cb_status", Static)
+        while True:
+            pw = await self.app.push_screen_wait(SudoPasswordModal())
+            if pw is None:
+                return False
+            status.update("[yellow]Authenticating…[/]")
+            ok = await sudo_authenticate(pw)
+            if ok:
+                status.update("[green]Authenticated.[/]")
+                return True
+            status.update("[red]Incorrect password — please try again.[/]")
 
 
 # ---------------------------------------------------------------------------
@@ -641,6 +702,10 @@ class RestoreBackupScreen(Screen):
         if not confirmed:
             return
 
+        # --- Sudo pre-authentication ---
+        if not await self._restore_sudo_preauth():
+            return
+
         self._in_progress = True
         self.query_one("#rb_start", Button).disabled = True
         self.query_one("#rb_refresh", Button).disabled = True
@@ -678,6 +743,20 @@ class RestoreBackupScreen(Screen):
             self._in_progress = False
             self.query_one("#rb_refresh", Button).disabled = False
             self.query_one("#rb_back", Button).disabled = False
+
+    async def _restore_sudo_preauth(self) -> bool:
+        """Collect password via modal and pre-authenticate sudo. Returns False if cancelled."""
+        status = self.query_one("#rb_status", Static)
+        while True:
+            pw = await self.app.push_screen_wait(SudoPasswordModal())
+            if pw is None:
+                return False
+            status.update("[yellow]Authenticating…[/]")
+            ok = await sudo_authenticate(pw)
+            if ok:
+                status.update("[green]Authenticated.[/]")
+                return True
+            status.update("[red]Incorrect password — please try again.[/]")
 
     def action_back(self) -> None:
         if not self._in_progress:

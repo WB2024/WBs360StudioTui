@@ -58,6 +58,40 @@ def _find_tool(name: str) -> str | None:
             return str(candidate)
     return None
 
+
+def _tool_path(name: str) -> str:
+    """Return full path for a required tool, raise RuntimeError if absent."""
+    p = _find_tool(name)
+    if not p:
+        raise RuntimeError(
+            f"Required tool not found: {name}. "
+            "Install it with: sudo apt install partclone zstd parted fatresize"
+        )
+    return p
+
+
+async def sudo_authenticate(password: str) -> bool:
+    """
+    Pre-authenticate sudo by running 'sudo -S true' with the given password.
+
+    Returns True on success, False if the password was wrong.
+    Caches sudo credentials for the session so subsequent sudo calls
+    proceed without further prompting.
+    """
+    proc = await asyncio.create_subprocess_exec(
+        "sudo", "-S", "-p", "", "true",
+        stdin=asyncio.subprocess.PIPE,
+        stdout=asyncio.subprocess.DEVNULL,
+        stderr=asyncio.subprocess.DEVNULL,
+    )
+    pw_bytes = (password + "\n").encode()
+    try:
+        await asyncio.wait_for(proc.communicate(input=pw_bytes), timeout=15)
+    except asyncio.TimeoutError:
+        proc.kill()
+        return False
+    return proc.returncode == 0
+
 # Overhead multiplier: target must be >= used_bytes * this factor
 _OVERHEAD_FACTOR = 1.05
 
@@ -289,7 +323,7 @@ def _is_os_mountpoint(mp: str) -> bool:
 async def _get_partclone_version() -> str:
     try:
         proc = await asyncio.create_subprocess_exec(
-            "partclone.fat", "--version",
+            _tool_path("partclone.fat"), "--version",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -308,7 +342,7 @@ async def _get_partclone_version() -> str:
 async def query_used_bytes(partition: str) -> int:
     """Run 'partclone.fat --info' and parse used block count × block size."""
     proc = await asyncio.create_subprocess_exec(
-        "sudo", "partclone.fat", "--info", "--source", partition,
+        "sudo", "-n", _tool_path("partclone.fat"), "--info", "--source", partition,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
@@ -370,8 +404,55 @@ def backup_image_path(backup_dir: Path, meta: BackupMeta) -> Path:
 
 
 # ---------------------------------------------------------------------------
-# Backup
+# Mount / unmount helpers
 # ---------------------------------------------------------------------------
+
+async def _unmount_device(partition: str) -> str | None:
+    """
+    Unmount a partition if it is currently mounted.
+    Returns the mountpoint string if unmounted, None if it wasn't mounted.
+    Raises RuntimeError if unmount fails.
+    """
+    import subprocess
+    result = subprocess.run(
+        ["findmnt", "-n", "-o", "TARGET", partition],
+        capture_output=True, text=True,
+    )
+    mountpoint = result.stdout.strip()
+    if not mountpoint:
+        return None  # not mounted
+    proc = await asyncio.create_subprocess_exec(
+        "sudo", "-n", "umount", partition,
+        stdout=asyncio.subprocess.DEVNULL,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    _, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"Failed to unmount {partition}: "
+            f"{stderr.decode('utf-8', errors='replace').strip()}"
+        )
+    return mountpoint
+
+
+async def _remount_device(partition: str) -> None:
+    """
+    Attempt to remount a partition using udisksctl (no sudo needed via polkit).
+    Non-fatal — just logs a warning on failure.
+    """
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "udisksctl", "mount", "-b", partition,
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        await asyncio.wait_for(proc.wait(), timeout=15)
+        log.info("Remounted %s via udisksctl", partition)
+    except Exception as e:
+        log.warning("Could not remount %s (non-fatal): %s", partition, e)
+
+
+
 
 async def create_backup(
     device: BlockDevice,
@@ -396,15 +477,21 @@ async def create_backup(
 
     partclone_version = await _get_partclone_version()
 
-    # Step 1: query used bytes
-    progress_cb(0.0, "Querying partition usage…")
+    # Step 1: unmount if mounted (partclone refuses to clone mounted filesystems)
+    progress_cb(0.0, "Checking mount status…")
+    mountpoint = await _unmount_device(device.partition)
+    if mountpoint:
+        progress_cb(1.0, f"Unmounted {device.partition} from {mountpoint}")
+
+    # Step 2: query used bytes
+    progress_cb(1.5, "Querying partition usage…")
     try:
         used_bytes = await query_used_bytes(device.partition)
     except Exception as e:
         log.warning("query_used_bytes failed (%s), continuing with 0", e)
         used_bytes = 0
 
-    # Step 2: get partition start offset via parted
+    # Step 3: get partition start offset via parted
     partition_start = await _get_partition_start_bytes(device.device, device.partition)
 
     progress_cb(2.0, f"Starting backup of {device.partition}…")
@@ -413,12 +500,12 @@ async def create_backup(
     # Use an OS-level pipe so both subprocesses share a real fd (StreamReader
     # has no fileno() so it cannot be passed as stdin to a second process).
     partclone_cmd = [
-        "sudo", "partclone.fat",
+        "sudo", "-n", _tool_path("partclone.fat"),
         "--clone",
         "--source", device.partition,
         "--output", "-",
     ]
-    zstd_cmd = ["zstd", "-T0", "-3", "-o", str(image_path), "--force"]
+    zstd_cmd = [_tool_path("zstd"), "-T0", "-3", "-o", str(image_path), "--force"]
 
     pipe_r, pipe_w = os.pipe()
     try:
@@ -472,6 +559,8 @@ async def create_backup(
         # Clean up partial image
         if image_path.exists():
             image_path.unlink(missing_ok=True)
+        if mountpoint:
+            await _remount_device(device.partition)
         raise RuntimeError(
             f"partclone.fat exited with code {p1.returncode}.\n{stderr_tail}"
         )
@@ -481,11 +570,15 @@ async def create_backup(
             zstd_err = await p2.stderr.read()
         if image_path.exists():
             image_path.unlink(missing_ok=True)
+        if mountpoint:
+            await _remount_device(device.partition)
         raise RuntimeError(
             f"zstd exited with code {p2.returncode}.\n{zstd_err.decode('utf-8', errors='replace')}"
         )
 
     if not image_path.exists() or image_path.stat().st_size == 0:
+        if mountpoint:
+            await _remount_device(device.partition)
         raise RuntimeError("Backup image is missing or empty after write.")
 
     progress_cb(97.0, "Writing metadata…")
@@ -509,6 +602,10 @@ async def create_backup(
     with meta_path.open("w", encoding="utf-8") as f:
         json.dump(meta.to_dict(), f, indent=2)
 
+    progress_cb(99.0, "Remounting USB…")
+    if mountpoint:
+        await _remount_device(device.partition)
+
     progress_cb(100.0, "Backup complete.")
     return meta
 
@@ -517,7 +614,7 @@ async def _get_partition_start_bytes(device: str, partition: str) -> int:
     """Use parted to get the partition start offset in bytes."""
     try:
         proc = await asyncio.create_subprocess_exec(
-            "sudo", "parted", "-s", "-m", device, "unit", "B", "print",
+            "sudo", "-n", _tool_path("parted"), "-s", "-m", device, "unit", "B", "print",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.DEVNULL,
         )
@@ -573,6 +670,12 @@ async def restore_backup(
     partition = target_device.partition
     device = target_device.device
 
+    # Unmount the target if it is mounted — partclone refuses to write to mounted fs
+    progress_cb(1.0, "Checking mount status…")
+    mountpoint = await _unmount_device(partition)
+    if mountpoint:
+        progress_cb(2.0, f"Unmounted {partition} from {mountpoint}")
+
     if mode == RestoreMode.SHRINK:
         # Repartition the target device to a fresh MBR + single FAT32 partition
         progress_cb(2.0, f"Repartitioning {device}…")
@@ -599,7 +702,7 @@ async def restore_backup(
     pipe_r, pipe_w = os.pipe()
     try:
         zstd_proc = await asyncio.create_subprocess_exec(
-            "zstd", "-d", "-T0", str(image_path), "--stdout",
+            _tool_path("zstd"), "-d", "-T0", str(image_path), "--stdout",
             stdout=pipe_w,
             stderr=asyncio.subprocess.DEVNULL,
         )
@@ -607,7 +710,7 @@ async def restore_backup(
         pipe_w = -1
 
         partclone_proc = await asyncio.create_subprocess_exec(
-            "sudo", "partclone.fat",
+            "sudo", "-n", _tool_path("partclone.fat"),
             "--restore",
             "--output", partition,
             stdin=pipe_r,
@@ -680,9 +783,9 @@ async def restore_backup(
 
 
 async def _run_sudo_cmd(cmd: list[str], label: str) -> str:
-    """Run a sudo command, return stdout, raise RuntimeError on non-zero exit."""
+    """Run a sudo -n command, return stdout, raise RuntimeError on non-zero exit."""
     proc = await asyncio.create_subprocess_exec(
-        "sudo", *cmd,
+        "sudo", "-n", *cmd,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
