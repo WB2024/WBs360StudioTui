@@ -131,6 +131,41 @@ Note - some screenshots may not be up-to-date with all of the functionality in t
 
 ---
 
+### ⚙️ Settings — Updates
+
+![Settings Updates](Screenshots/Settings3.png)
+*The Updates section at the bottom of Settings — Auto-Update toggle, Update Channel selector (Latest stable / Pre-release), and the Check for Updates button with a live status line below it.*
+
+---
+
+### 📋 Title Updates
+
+![Title Updates](Screenshots/TitleUpdates.png)
+*The Title Updates screen listing STFS packages found in `LocalTitleUpdates/`, with game name, TitleID, and version parsed directly from the binary header. The detail pane shows the selected package's metadata and install options.*
+
+---
+
+### 🔄 New Game Processing Pipeline
+
+![New Game Processing](Screenshots/NewGameProcessing.png)
+*New Game Processing — the 6-stage pipeline screen. Stages are listed on the left; the right panel shows the game selection table after scanning the download folder.*
+
+---
+
+### 🖴 USB Backup & Restore
+
+![USB Backup](Screenshots/UsbBackup.png)
+*USB Backup & Restore accessed via the Utilities menu. The device selection table lists all removable drives. Create Backup and Restore Backup each proceed to a sub-screen with a live progress bar and scrolling log.*
+
+---
+
+### 💀 Create BadAvatar USB
+
+![BadAvatar USB Creator](Screenshots/BadAvatarUSB.png)
+*The Create BadAvatar USB screen — device selection table with a connected USB drive listed. The Aurora auto-boot toggle sits above the Build button. The scrolling log fills in real time as each stage completes.*
+
+---
+
 ## �🚀 What is x360tm?
 
 x360tm is a full-featured terminal UI for Xbox 360 modding. Instead of hunting through websites or manually FTP-ing files, you get a fast, searchable, keyboard-driven interface that connects directly to your console and installs everything for you.
@@ -190,7 +225,16 @@ It pulls live data from the Arisen Studio public database — thousands of mods,
 - Binary is **downloaded automatically** on first use — no manual setup required
 - Live progress bar showing current part, total parts, and detected Title ID / game name
 - Output goes directly to your configured **Local GOD Path**, ready to transfer via Transfer Games
+### 🔄 New Game Processing Pipeline
 
+- End-to-end workflow for getting freshly downloaded games onto your console
+- **Stage 0: Extract** — scans your Torrent download folder for archives (`zip`, `7z`, `rar`); pick which to unpack; extracted using 7-Zip
+- **Stage 1: Scan** — finds ISO disc images and GOD containers in the download folder
+- **Stage 2: Select** — choose which discovered games to include in this batch
+- **Stage 3: Convert** — ISO images are converted to GOD format (skipped automatically if the game is already in GOD format)
+- **Stage 4: Tidy** — applies your chosen local folder naming format (`Name/TitleID`, `TitleID`, etc.)
+- **Stage 5: Transfer** — sends all processed games to your console via FTP or to a mounted USB drive
+- Resolves game names from the bundled 4,047-title CSV for the tidy and display steps
 ### � FTP File Browser
 
 - Navigate your Xbox 360's entire filesystem directly from the TUI
@@ -199,7 +243,15 @@ It pulls live data from the Arisen Studio public database — thousands of mods,
 - Keyboard shortcuts: `Backspace` / `U` to go up, `R` to refresh, `N` to rename, `Del` to delete
 - Useful for inspecting installed content, tidying up folders, or verifying installs
 
-### 🔧 Utilities — Game Directory Tidy-up
+### � Title Updates
+
+- Scan your `LocalTitleUpdates/` folder for Xbox 360 title update packages
+- Reads **STFS binary headers** (CON/LIVE/PIRS magic) to extract TitleID, display name, and version number directly from the package file — no metadata files needed
+- Displays a searchable list with game name (resolved from the bundled CSV), TitleID, and version
+- Select a package and choose to install it via **FTP** (direct to console) or copy it to a **mounted USB drive**
+- Supports both flat file layout and `{TitleID} - {GameName}/` subfolder structure under `LocalTitleUpdates/`
+
+### �🔧 Utilities — Game Directory Tidy-up
 
 - Accessible via the **Utilities** button on the main menu
 - Scans your configured **game install path** over FTP and analyses the folder structure of every game
@@ -217,7 +269,28 @@ It pulls live data from the Arisen Studio public database — thousands of mods,
 - Applies changes over FTP using `RNFR`/`RNTO` (rename) — no files are copied or deleted
 - Cleans up empty parent folders after moves
 
-### 📦 Game Torrents (Selective Download)
+### � USB Backup & Restore *(Linux only)*
+
+- Block-level backup and restore of Xbox 360 USB drives using **partclone** + **zstd** compression
+- Accessible via the **Utilities** button on the main menu
+- **Create Backup** — select a removable device, image the used blocks with partclone, compress in real time with zstd; a metadata JSON is saved alongside the `.img.zst` archive
+- **Restore Backup** — browse saved backups and restore to any compatible device; a compatibility check warns if the target capacity is smaller than the original
+- Live scrolling log with progress bar during both operations
+- Requires `partclone` and `zstd` (`apt install partclone zstd`); sudo is prompted in-app via a password modal
+- All destructive actions gated behind a confirmation modal
+
+### 💀 Create BadAvatar USB *(Linux only)*
+
+- Builds an **Xbox 360 BadAvatar exploit USB** in one click — no manual steps
+- Available as a dedicated **Create BadAvatar USB** button on the main menu (highlighted in red)
+- Formats the target USB with the `BADUPDATE` volume label required by the exploit
+- Copies **XeUnshackle 1.03** and **ABadAvatar 1.1** payload files from your local `BadAvatarFiles/` folder
+- Optional **Aurora auto-boot toggle** (enabled by default) — patches `launch.ini` so Aurora loads automatically after the hack completes
+- Live scrolling log shows every stage as it runs
+- Requires sudo (prompted in-app) and a populated `BadAvatarFiles/` folder (not distributed — copyright restricted; obtain separately)
+- Platform guard enforced: Linux only — a clear unsupported panel is shown on Windows or macOS
+
+### �📦 Game Torrents (Selective Download)
 
 - Drop `.torrent` files for **legally-owned Xbox 360 game backups** into the bundled `Torrent/` folder at the repo root
 - The **Game Torrents** screen lists every `.torrent` file with name, file count, and total size
@@ -265,6 +338,9 @@ Alongside the Arisen Studio online database, x360tm supports **local content fol
 - **Local ISO Path** — folder containing your Xbox 360 ISO files (used by ISO → GOD)
 - **Game Install Path** — destination path on console for GOD game transfers (default: `Hdd:\Content\0000000000000000\`)
 - **DB Cache** — refresh from Arisen servers or clear, with age display
+- **Auto-Update** — toggle automatic update checks on startup (silent toast notification when an update is available)
+- **Update Channel** — choose between `Latest stable` and `Pre-release` builds
+- **Check for Updates** — manual one-click update check; downloads the new release with a live progress bar; on Linux the app restarts automatically, on Windows a helper script swaps the binary
 
 ### 🔧 Technical
 
@@ -399,8 +475,9 @@ Builds for both platforms are also produced automatically via GitHub Actions whe
 | Local Trainers | `LocalTrainers/` (repo root — 550+ trainers shipped)                     |
 | Local Mods     | `LocalMods/` (repo root — add your own)                                  |
 | Local Homebrew | `LocalHomebrew/` (repo root — add your own)                              |
-| Local Saves    | `LocalGameSaves/` (repo root — add your own)                             |
-| Torrent files  | `Torrent/` (repo root — drop `.torrent` files for legally-owned games) |
+| Local Saves         | `LocalGameSaves/` (repo root — add your own)                                  |
+| Local Title Updates | `LocalTitleUpdates/` (repo root — place STFS title update packages here)      |
+| Torrent files       | `Torrent/` (repo root — drop `.torrent` files for legally-owned games)        |
 
 ---
 
@@ -445,6 +522,10 @@ Then open **My Library → Scan Library** and all your installed games appear by
 - [ ] **Library auto-scan on connect** — scan automatically when FTP connection is established
 - [ ] **Web UI** — Make the TUI in webapp Mode so can be accessed from other devices remotley.
 - [X] **New Game Processing Workflow** — Automatically batch convert ISOs from download folder to GODs, tidy up and transfer to console
+- [X] **Title Updates** — browse and install local STFS title update packages via FTP or USB
+- [X] **USB Backup & Restore** — block-level USB imaging and restore using partclone + zstd (Linux)
+- [X] **BadAvatar USB Creator** — one-click exploit USB builder for Xbox 360 (Linux)
+- [X] **Self-update system** — in-app update checker, downloader, and auto-apply with restart
 
 ### Medium-term
 

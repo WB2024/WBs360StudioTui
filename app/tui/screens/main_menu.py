@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Vertical
+from textual.containers import Grid, Horizontal, Vertical
 from textual.screen import Screen
-from textual.widgets import Button, Footer, Header, Static
+from textual.widgets import Button, Footer, Header, Rule, Static
 
 from app.tui.screens.game_cheats import GameCheatsScreen
 from app.tui.screens.game_mods import GameModsScreen
@@ -31,28 +31,39 @@ class MainMenuScreen(Screen):
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=False)
-        yield ConnectionBar(id="conn_bar")
         with Vertical(id="main_menu"):
-            with Vertical(id="main_menu_buttons"):
-                yield Static("[b cyan]x360tm — Xbox 360 Mod Manager[/]")
+            with Vertical(id="main_menu_title"):
+                yield Static("[b cyan]x360tm — Xbox 360 Mod Manager[/b cyan]", id="main_title")
+                yield Rule()
                 yield Static("", id="counts", classes="muted")
-                yield Button("My Library", id="m_lib", classes="menu_button", variant="success")
-                yield Button("Game Mods", id="m_mods", classes="menu_button", variant="primary")
-                yield Button("Homebrew", id="m_hb", classes="menu_button")
-                yield Button("Trainers", id="m_tr", classes="menu_button")
-                yield Button("Game Saves", id="m_gs", classes="menu_button")
-                yield Button("Game Cheats", id="m_gc", classes="menu_button")
-                yield Button("Game Patches", id="m_gp", classes="menu_button")
-                yield Button("Title Updates", id="m_tu", classes="menu_button", variant="warning")
-                yield Button("Transfer Games", id="m_tg", classes="menu_button", variant="warning")
-                yield Button("ISO → GOD", id="m_iso", classes="menu_button", variant="warning")
-                yield Button("Game Torrents", id="m_tor", classes="menu_button", variant="warning")
-                yield Button("New Game Processing", id="m_pip", classes="menu_button", variant="warning")
-                yield Button("FTP File Browser", id="m_ftp", classes="menu_button", variant="warning")
-                yield Button("Utilities", id="m_utils", classes="menu_button")
-                yield Button("Settings", id="m_set", classes="menu_button")
-                yield Button("Create BadAvatar USB", id="m_badavatar", classes="menu_button", variant="error")
-                yield Button("Quit", id="m_quit", classes="menu_button", variant="error")
+            with Vertical(id="main_menu_center"):
+                with Horizontal(id="main_menu_buttons"):
+                    # Col 1: Navigation
+                    with Vertical(classes="menu_col"):
+                        yield Button("My Library", id="m_lib", classes="menu_button", variant="success")
+                        yield Button("Settings", id="m_set", classes="menu_button")
+                        yield Button("Utilities", id="m_utils", classes="menu_button")
+                        yield Button("Quit", id="m_quit", classes="menu_button", variant="error")
+                    # Col 2: Browse & Content (all blue)
+                    with Vertical(classes="menu_col"):
+                        yield Button("Trainers", id="m_tr", classes="menu_button", variant="primary")
+                        yield Button("Game Mods", id="m_mods", classes="menu_button", variant="primary")
+                        yield Button("Homebrew", id="m_hb", classes="menu_button", variant="primary")
+                        yield Button("Game Saves", id="m_gs", classes="menu_button", variant="primary")
+                        yield Button("Game Cheats", id="m_gc", classes="menu_button", variant="primary")
+                        yield Button("Game Patches", id="m_gp", classes="menu_button", variant="primary")
+                    # Col 3: Game Pipeline (all yellow)
+                    with Vertical(classes="menu_col"):
+                        yield Button("Title Updates", id="m_tu", classes="menu_button", variant="warning")
+                        yield Button("Transfer Games", id="m_tg", classes="menu_button", variant="warning")
+                        yield Button("ISO \u2192 GOD", id="m_iso", classes="menu_button", variant="warning")
+                    # Col 4: Advanced / Exploit Tools (all pink/error)
+                    with Vertical(classes="menu_col"):
+                        yield Button("New Game Processing", id="m_pip", classes="menu_button", variant="error")
+                        yield Button("Game Torrents", id="m_tor", classes="menu_button", variant="error")
+                        yield Button("FTP File Browser", id="m_ftp", classes="menu_button", variant="error")
+                        yield Button("Create BadAvatar USB", id="m_badavatar", classes="menu_button", variant="error")
+        yield ConnectionBar(id="conn_bar")
         yield Footer()
 
     def on_mount(self) -> None:

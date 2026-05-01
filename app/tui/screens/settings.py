@@ -157,6 +157,7 @@ class SettingsScreen(Screen):
                 id="backup_dir",
             )
             yield Static("\n[b cyan]Updates[/]")
+            yield Static(f"[dim]Current version: [bold]{app_mod.__version__}[/bold][/]")
             yield Static("[dim]Check GitHub Releases for newer versions of x360tm.[/]")
             with Horizontal():
                 yield Label("Auto-update on launch  ")

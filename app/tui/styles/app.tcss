@@ -29,16 +29,37 @@ StatusBar {
 }
 
 #main_menu {
-    align: center top;
-    padding: 2;
-    overflow-y: auto;
+    height: 1fr;
+}
+
+#main_menu_title {
+    height: auto;
+    padding: 1 2 0 2;
+}
+
+#main_title {
+    text-style: bold;
+    text-align: center;
+    color: cyan;
+    padding: 1 0;
+}
+
+#main_menu_center {
+    height: 1fr;
+    align: center middle;
 }
 
 #main_menu_buttons {
-    width: 50;
     height: auto;
     border: round #00d4ff;
     padding: 1 2;
+}
+
+.menu_col {
+    width: auto;
+    min-width: 30;
+    height: auto;
+    margin: 0 1;
 }
 
 .menu_button {
