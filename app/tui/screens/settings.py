@@ -300,7 +300,7 @@ class SettingsScreen(Screen):
             except Exception:
                 pass
         elif bid == "check_updates":
-            self.run_worker(self._check_updates_worker(), exclusive=False)
+            self.run_worker(self._check_updates_worker(), exclusive=True)
 
     async def _ftp_test_worker(self, prof) -> None:
         client = FtpClient(prof.host, prof.port, prof.username, prof.password)
@@ -398,7 +398,7 @@ class SettingsScreen(Screen):
             # Linux — binary replaced in-place; re-exec after Textual exits
             status.update("[green]Update applied! Restarting…[/]")
             await asyncio.sleep(1)
-            self.app.exit(return_value="restart")
+            self.app.exit(result="restart")
         else:
             # Windows — PS1 helper will replace binary and relaunch
             status.update("[green]Update downloaded! App will restart shortly.[/]")
