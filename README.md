@@ -110,10 +110,27 @@ Note - some screenshots may not be up-to-date with all of the functionality in t
 
 ---
 
+### 🎮 Game Torrents — File Selector
+
+![Game Torrents](Screenshots/Torrent1.png)
+*The torrent file browser — here a "Microsoft - Xbox 360 (Digital)" torrent is expanded showing 14,375 files (1.19 TB total). Individual files or entire folders can be toggled with `Space`; `[x]`/`[~]`/`[ ]` checkboxes show full / partial / none selection. Press `D` to hand the selection to qBittorrent via its Web API — only the chosen files are downloaded.*
+
+---
+
 ### ISO → GOD Converter
 
 ![ISO → GOD Converter](Screenshots/ISO2God.png)
 *The ISO → GOD converter scans your local ISO folder and lists all Xbox 360 disc images. Here Dead Space (Europe) and Minecraft are detected at 7.30 GB each. The detail pane shows the full ISO path, the output GOD folder, and the binary status (`Ready (v1.8.1)`). The `iso2god` binary (v1.8.1, powered by [iso2god-rs](https://github.com/iliazeus/iso2god-rs)) is downloaded automatically on first use — just click "Get Binary". Hit Convert to GOD (or `C`) to start the conversion with a live progress bar.*
+
+---
+
+### 🗂️ FTP File Browser
+
+![FTP File Browser](Screenshots/FileBrowser2.png)
+*The FTP File Browser navigated to `/Usb1/Games` — a full listing of installed game folders with timestamps. From here you can browse any drive, rename or delete files and directories in-place, and verify exactly what's installed on your console.*
+
+![FTP File Browser — Connected](Screenshots/Filemanager.png)
+*FTP File Browser connected to `192.168.1.187:21`, showing the root filesystem (Game, Hdd1, HddX, SysExt, System, Usb0, Usb1). Keyboard shortcut bar at the bottom: `esc Back`, `↑ Up`, `r Rename`, `d Delete`, `f5 Refresh`, `q Quit`.*
 
 ---
 
@@ -147,15 +164,32 @@ Note - some screenshots may not be up-to-date with all of the functionality in t
 
 ### 🔄 New Game Processing Pipeline
 
-![New Game Processing](Screenshots/NewGameProcessing.png)
-*New Game Processing — the 6-stage pipeline screen. Stages are listed on the left; the right panel shows the game selection table after scanning the download folder.*
+![New Game Processing — Select Stage](Screenshots/NewGameProcessing4.png)
+*New Game Processing at the **Select** stage — the 6-stage pipeline tabs (Extract, Scan, Select, Convert, Tidy, Transfer) are shown at the top, with completed stages highlighted green. The game table lists all detected ISOs with their type and current status. "Found 3 game(s): 3 ISO, 0 already GOD" — select them and click Proceed to continue.*
 
 ---
 
-### 🖴 USB Backup & Restore
+### �️ Utilities Hub
 
-![USB Backup](Screenshots/UsbBackup.png)
-*USB Backup & Restore accessed via the Utilities menu. The device selection table lists all removable drives. Create Backup and Restore Backup each proceed to a sub-screen with a live progress bar and scrolling log.*
+![Utilities](Screenshots/Utilities.png)
+*The Utilities hub screen — "Game Directory Tidy-up" and "USB Backup / Restore" buttons. Accessible from the main menu via the Utilities button.*
+
+---
+
+### 📁 Game Directory Tidy-up
+
+![Game Directory Tidy-up](Screenshots/GameDirectoryTidy-up1.png)
+*Game Directory Tidy-up after analysis — a 35-game table showing Title ID, match type (CSV exact, Fuzzy %, Dir inferred), current folder structure, and planned rename action. Status bar: "35 game(s) found | 8 to move | 27 already correct | 0 skipped | Format: Name/TitleID". Click Apply Changes to perform the renames over FTP using RNFR/RNTO.*
+
+---
+
+### �🖴 USB Backup & Restore
+
+![USB Backup — Create](Screenshots/Backuprestore3.png)
+*Create USB Backup screen — the auto-detected device table shows `/dev/sdc` (BADUPDATE, 7.2 GiB, vfat, ★auto-detected). The live scrolling log tracks partclone + zstd progress from 0% to 100%; on completion the output filename and compressed size are shown (`usb_backup_BADUPDATE_2026-05-01_124625.pcl.zst — 0.14 GiB compressed`). Accessed via Utilities → USB Backup / Restore → Create Backup.*
+
+![USB Backup — Restore](Screenshots/Backuprestore4.png)
+*USB Backup Restore screen — two side-by-side tables: saved backups (with timestamps and compressed sizes) and available target devices. A capacity check warns when the target drive matches or exceeds the source. Click Restore to decompress and write the image back to the USB drive with a live progress log.*
 
 ---
 
@@ -163,7 +197,8 @@ Note - some screenshots may not be up-to-date with all of the functionality in t
 
 ![BadAvatar USB Creator](Screenshots/BadAvatarUSB.png)
 *The Create BadAvatar USB screen — device selection table with a connected USB drive listed. The Aurora auto-boot toggle sits above the Build button. The scrolling log fills in real time as each stage completes.*
-
+![BadAvatar USB — Complete](Screenshots/BadAvatarUSB4.png)
+*BadAvatar USB build complete — "✓ BadAvatar USB created successfully!" summary panel showing what was installed: ABadAvatar v1.1 + XeUnshackle 1.03, Aurora 0.7b.2 (auto-boot enabled). Instructions prompt you to plug the drive into Xbox Usb0 and power on.*
 ---
 
 ## �🚀 What is x360tm?
@@ -557,6 +592,21 @@ Then open **My Library → Scan Library** and all your installed games appear by
 ## 🤝 Contributing
 
 PRs welcome. Run `pytest` before submitting. Please keep changes focused and include tests for new logic.
+
+---
+
+## ⚠️ Legal Disclaimer
+
+This software is provided for **educational and personal use only**.
+
+The author does not endorse, encourage, or facilitate piracy, copyright infringement, or any other illegal activity. This tool is intended for use with content you legally own.
+
+**By using this software you agree that:**
+- You are solely responsible for how you use it and for ensuring your use complies with all applicable laws in your jurisdiction.
+- The author bears no responsibility or liability for any consequences — legal, financial, or otherwise — arising from its use.
+- Features that interact with torrent clients or exploit USB creation are designed for **legally owned game backups** and **console homebrewing / research** respectively. Using them for piracy or unauthorised access to systems you do not own is entirely at your own risk.
+
+Always ensure you own physical or digital copies of any games you interact with.
 
 ---
 
