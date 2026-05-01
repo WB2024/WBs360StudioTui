@@ -410,6 +410,8 @@ async def create_backup(
     progress_cb(2.0, f"Starting backup of {device.partition}…")
 
     # Step 3: run partclone.fat --clone | zstd
+    # Use an OS-level pipe so both subprocesses share a real fd (StreamReader
+    # has no fileno() so it cannot be passed as stdin to a second process).
     partclone_cmd = [
         "sudo", "partclone.fat",
         "--clone",
@@ -418,20 +420,32 @@ async def create_backup(
     ]
     zstd_cmd = ["zstd", "-T0", "-3", "-o", str(image_path), "--force"]
 
-    p1 = await asyncio.create_subprocess_exec(
-        *partclone_cmd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
-    p2 = await asyncio.create_subprocess_exec(
-        *zstd_cmd,
-        stdin=p1.stdout,
-        stdout=asyncio.subprocess.DEVNULL,
-        stderr=asyncio.subprocess.PIPE,
-    )
-    # Allow p1's stdout to flow into p2
-    if p1.stdout:
-        p1.stdout.set_exception_handler(None)
+    pipe_r, pipe_w = os.pipe()
+    try:
+        p1 = await asyncio.create_subprocess_exec(
+            *partclone_cmd,
+            stdout=pipe_w,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        os.close(pipe_w)  # parent doesn't write; closing lets p2 see EOF when p1 exits
+        pipe_w = -1
+
+        p2 = await asyncio.create_subprocess_exec(
+            *zstd_cmd,
+            stdin=pipe_r,
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        os.close(pipe_r)
+        pipe_r = -1
+    except Exception:
+        for fd in (pipe_r, pipe_w):
+            if fd != -1:
+                try:
+                    os.close(fd)
+                except OSError:
+                    pass
+        raise
 
     # Stream partclone stderr for progress
     partclone_stderr_lines: list[str] = []
@@ -444,7 +458,6 @@ async def create_backup(
                 m = _PARTCLONE_PROGRESS_RE.search(line)
                 if m:
                     pct = float(m.group(1))
-                    # Map 0–100% to 2–95% of our overall progress
                     mapped = 2.0 + pct * 0.93
                     progress_cb(mapped, f"Backing up… {pct:.1f}%")
 
@@ -582,19 +595,35 @@ async def restore_backup(
     # Restore the image
     progress_cb(10.0, f"Restoring to {partition}…")
 
-    zstd_proc = await asyncio.create_subprocess_exec(
-        "zstd", "-d", "-T0", str(image_path), "--stdout",
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.DEVNULL,
-    )
-    partclone_proc = await asyncio.create_subprocess_exec(
-        "sudo", "partclone.fat",
-        "--restore",
-        "--output", partition,
-        stdin=zstd_proc.stdout,
-        stdout=asyncio.subprocess.DEVNULL,
-        stderr=asyncio.subprocess.PIPE,
-    )
+    # Use an OS-level pipe: zstd stdout → partclone stdin
+    pipe_r, pipe_w = os.pipe()
+    try:
+        zstd_proc = await asyncio.create_subprocess_exec(
+            "zstd", "-d", "-T0", str(image_path), "--stdout",
+            stdout=pipe_w,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        os.close(pipe_w)
+        pipe_w = -1
+
+        partclone_proc = await asyncio.create_subprocess_exec(
+            "sudo", "partclone.fat",
+            "--restore",
+            "--output", partition,
+            stdin=pipe_r,
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        os.close(pipe_r)
+        pipe_r = -1
+    except Exception:
+        for fd in (pipe_r, pipe_w):
+            if fd != -1:
+                try:
+                    os.close(fd)
+                except OSError:
+                    pass
+        raise
 
     partclone_err_lines: list[str] = []
     async def _read_restore_stderr():
