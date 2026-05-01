@@ -50,14 +50,14 @@ StatusBar {
 }
 
 #main_menu_buttons {
+    width: auto;
     height: auto;
     border: round #00d4ff;
     padding: 1 2;
 }
 
 .menu_col {
-    width: auto;
-    min-width: 30;
+    width: 28;
     height: auto;
     margin: 0 1;
 }

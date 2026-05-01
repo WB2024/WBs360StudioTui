@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import app as app_mod
 import asyncio
 import shutil
 import sys
@@ -340,7 +341,6 @@ class SettingsScreen(Screen):
             pass
 
     async def _check_updates_worker(self) -> None:
-        import app as app_mod
         from app.core.updater import UpdateInfo, check_for_update, download_update, apply_update, restart_app
 
         status = self.query_one("#update_status", Static)
