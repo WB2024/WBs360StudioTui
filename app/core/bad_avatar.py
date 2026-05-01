@@ -173,7 +173,12 @@ async def format_and_mount(
     await _run_sudo("mkdir", "-p", str(mount_path), sudo_password=sudo_password)
 
     _log(f"Mounting {device} at {mount_path}...")
-    await _run_sudo("mount", device, str(mount_path), sudo_password=sudo_password)
+    await _run_sudo(
+        "mount",
+        "-o", f"uid={os.getuid()},gid={os.getgid()}",
+        device, str(mount_path),
+        sudo_password=sudo_password,
+    )
 
     _log(f"Mounted at {mount_path}")
     return mount_path
