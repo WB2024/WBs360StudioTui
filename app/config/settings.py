@@ -72,6 +72,7 @@ class Settings:
     qbit_password: str = "adminadmin"
     auto_update: bool = True
     update_channel: str = "latest"  # 'latest' | 'pre-release'
+    backup_dir: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -95,6 +96,7 @@ class Settings:
             "qbit_password": self.qbit_password,
             "auto_update": self.auto_update,
             "update_channel": self.update_channel,
+            "backup_dir": self.backup_dir,
         }
 
     @classmethod
@@ -124,6 +126,7 @@ class Settings:
             qbit_password=d.get("qbit_password", "adminadmin"),
             auto_update=bool(d.get("auto_update", True)),
             update_channel=d.get("update_channel", "latest"),
+            backup_dir=d.get("backup_dir", ""),
         )
 
     # --- Profile mgmt ---

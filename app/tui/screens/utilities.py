@@ -25,6 +25,7 @@ class UtilitiesScreen(Screen):
             yield Static("[b cyan]Utilities[/b cyan]")
             yield Static("Console organisation and management tools.", classes="muted")
             yield Button("Game Directory Tidy-up", id="u_tidy", variant="primary", classes="menu_button")
+            yield Button("USB Backup / Restore", id="u_backup", variant="primary", classes="menu_button")
             yield Button("Back [Esc]", id="u_back", classes="menu_button")
         yield StatusBar(id="status_bar")
         yield Footer()
@@ -41,6 +42,9 @@ class UtilitiesScreen(Screen):
         if event.button.id == "u_tidy":
             from app.tui.screens.game_tidy import GameTidyScreen
             self.app.push_screen(GameTidyScreen())
+        elif event.button.id == "u_backup":
+            from app.tui.screens.usb_backup import UsbBackupScreen
+            self.app.push_screen(UsbBackupScreen())
         elif event.button.id == "u_back":
             self.app.pop_screen()
 

@@ -149,6 +149,13 @@ class SettingsScreen(Screen):
                 id="qbit_password",
                 password=True,
             )
+            yield Static("\n[b cyan]USB Backup Directory[/]")
+            yield Static("[dim]Local folder to store USB backup images.\nLeave empty to use default (USBBackups/ in app folder).[/]")
+            yield Input(
+                value=self.app.settings.backup_dir,
+                placeholder="Leave empty for default",
+                id="backup_dir",
+            )
             yield Static("\n[b cyan]Updates[/]")
             yield Static("[dim]Check GitHub Releases for newer versions of x360tm.[/]")
             with Horizontal():
@@ -274,6 +281,7 @@ class SettingsScreen(Screen):
                 app.settings.qbit_port = 8080
             app.settings.qbit_username = self.query_one("#qbit_username", Input).value.strip() or "admin"
             app.settings.qbit_password = self.query_one("#qbit_password", Input).value or "adminadmin"
+            app.settings.backup_dir = self.query_one("#backup_dir", Input).value.strip()
             app.settings.auto_update = self.query_one("#auto_update", Switch).value
             sel = self.query_one("#update_channel", Select)
             if sel.value and sel.value is not Select.BLANK:

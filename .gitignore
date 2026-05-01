@@ -51,3 +51,9 @@ desktop.ini
 *.torrent
 
 torrent-selector-spec_Version2.md
+x360tm
+
+# USB backup images (local only, not committed)
+USBBackups/
+DEVNOTES.md
+USB_BACKUP_RESTORE_SPEC.md
