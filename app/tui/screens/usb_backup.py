@@ -191,45 +191,45 @@ class UsbBackupScreen(Screen):
         )
 
     def _not_supported_widget(self) -> Vertical:
-        v = Vertical(id="unsupported_box")
-        v.mount(Static("[b red]USB Backup / Restore — Linux Only[/]"))
-        v.mount(Static(
-            "\nThis feature uses Linux block-level tools (partclone, parted) "
-            "that are not available on Windows.\n\n"
-            "To use this feature, run x360tm on a Linux machine."
-        ))
-        v.mount(Button("Back", id="hub_back", variant="primary"))
-        return v
+        return Vertical(
+            Static("[b red]USB Backup / Restore — Linux Only[/]"),
+            Static(
+                "\nThis feature uses Linux block-level tools (partclone, parted) "
+                "that are not available on Windows.\n\n"
+                "To use this feature, run x360tm on a Linux machine."
+            ),
+            Button("Back", id="hub_back", variant="primary"),
+            id="unsupported_box",
+        )
 
     def _missing_deps_widget(self, deps: dict[str, bool]) -> Vertical:
         missing = [t for t, ok in deps.items() if not ok]
-        v = Vertical(id="dep_box")
-        v.mount(Static("[b yellow]Missing Required Tools[/]"))
-        v.mount(Static(
-            "\nThe following tools must be installed before using USB Backup / Restore:"
-        ))
-        for tool in missing:
-            v.mount(Static(f"  [red]✗[/]  {tool}"))
-        v.mount(Static(
-            "\nInstall command:\n"
-            "[bold]  sudo apt install partclone zstd parted fatresize[/bold]"
-        ))
-        v.mount(Button("Install missing tools", id="hub_install", variant="warning"))
-        v.mount(Button("Re-check", id="hub_recheck", variant="primary"))
-        v.mount(Button("Back", id="hub_back"))
-        return v
+        return Vertical(
+            Static("[b yellow]Missing Required Tools[/]"),
+            Static("\nThe following tools must be installed before using USB Backup / Restore:"),
+            *[Static(f"  [red]✗[/]  {tool}") for tool in missing],
+            Static(
+                "\nInstall command:\n"
+                "[bold]  sudo apt install partclone zstd parted fatresize[/bold]"
+            ),
+            Button("Install missing tools", id="hub_install", variant="warning"),
+            Button("Re-check", id="hub_recheck", variant="primary"),
+            Button("Back", id="hub_back"),
+            id="dep_box",
+        )
 
     def _hub_widget(self) -> Vertical:
-        v = Vertical(id="backup_hub_box")
-        v.mount(Static("[b cyan]USB Backup / Restore[/]"))
-        v.mount(Static(
-            "\nCreate or restore a full block-level image of your Xbox 360 exploit USB.\n"
-            "[dim]Requires elevated privileges (sudo) for block-level access.[/dim]"
-        ))
-        v.mount(Button("Create Backup", id="hub_backup", variant="success"))
-        v.mount(Button("Restore from Backup", id="hub_restore", variant="warning"))
-        v.mount(Button("Back [Esc]", id="hub_back"))
-        return v
+        return Vertical(
+            Static("[b cyan]USB Backup / Restore[/]"),
+            Static(
+                "\nCreate or restore a full block-level image of your Xbox 360 exploit USB.\n"
+                "[dim]Requires elevated privileges (sudo) for block-level access.[/dim]"
+            ),
+            Button("Create Backup", id="hub_backup", variant="success"),
+            Button("Restore from Backup", id="hub_restore", variant="warning"),
+            Button("Back [Esc]", id="hub_back"),
+            id="backup_hub_box",
+        )
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         bid = event.button.id
