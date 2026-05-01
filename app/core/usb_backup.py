@@ -793,6 +793,10 @@ async def restore_backup(
     # Resize FAT32 filesystem to fill the (possibly new/different) partition
     progress_cb(92.0, "Resizing filesystem…")
 
+    # udisks auto-mounts the partition the moment partclone writes a valid FAT32 to it.
+    # fsck.fat and fatresize both refuse to operate on mounted filesystems, so unmount again.
+    await _unmount_device(partition)
+
     if mode == RestoreMode.EXACT and target_device.partition_bytes > meta.partition_size_bytes:
         # Target is larger: expand partition first
         try:
@@ -807,7 +811,7 @@ async def restore_backup(
         # After a -C (size-bypassed) restore the FAT32 BPB still contains the original
         # total_sectors from the larger source partition.  fatresize refuses to run when
         # FS > volume.  fsck.fat -a rewrites total_sectors to match the real partition
-        # size so fatresize can proceed.
+        # size so fatresize can proceed.  Must run on unmounted FS (done above).
         fsckfat = _find_tool("fsck.fat")
         if fsckfat:
             try:
@@ -832,6 +836,9 @@ async def restore_backup(
             progress_cb(98.0, f"[yellow]Warning: fatresize failed — {e}[/]")
     else:
         log.warning("fatresize not found — skipping filesystem resize")
+
+    # Remount so the user can access the restored drive immediately
+    await _remount_device(partition)
 
     progress_cb(100.0, "Restore complete.")
 
