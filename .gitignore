@@ -25,6 +25,11 @@ htmlcov/
 # *.spec intentionally NOT ignored — x360tm.spec is committed to the repo
 *.manifest
 
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
 # Logs
 *.log
 logs/
@@ -50,18 +55,36 @@ desktop.ini
 # Torrent files (user-supplied, not committed)
 *.torrent
 
-torrent-selector-spec_Version2.md
-x360tm
-
 # USB backup images (local only, not committed)
 USBBackups/
+
+# Local title updates (user-supplied, not committed)
+LocalTitleUpdates/
 
 # ABadAvatar source files (local only — too large for git, copyright-restricted)
 BadAvatarFiles/
 
+# Playwright / browser automation artefacts
+.playwright-mcp/
+Screenshots/
+*.png
+*.jpg
+*.jpeg
+
+# Local game data (user-supplied, not committed)
+LocalCheats/
+LocalGameSaves/
+LocalHomebrew/
+LocalMods/
+LocalPatches/
+LocalTrainers/
+
+# Compiled binary (built artefact)
+x360tm
+
+# Design / planning docs (not part of the distributed project)
+torrent-selector-spec_Version2.md
 DEVNOTES.md
 USB_BACKUP_RESTORE_SPEC.md
 BADAVATAR_USB_SPEC.md
 RELEASE_GUIDE.md
-.playwright-mcp/page-2026-05-01T10-37-05-135Z.png
-.gitignore

@@ -9,6 +9,7 @@ from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen, Screen
 from textual.widgets import Button, Footer, Header, Input, Label, ListItem, ListView, Static
+from textual.widgets.data_table import RowKey
 
 from app.core.ftp_client import FtpClient
 from app.core.god_scanner import scan_god_path
@@ -21,6 +22,11 @@ from app.tui.widgets.mod_detail import ModDetail
 from app.tui.widgets.mod_table import ModTable
 from app.tui.widgets.progress_modal import ProgressModal
 from app.tui.widgets.status_bar import StatusBar
+
+# Console-status cell text
+_ON_CONSOLE = "[green]✓ On console[/]"
+_NOT_ON_CONSOLE = "[yellow]Not on console[/]"
+_UNKNOWN = "[dim]Unknown[/]"
 
 
 def _fmt_bytes(b: int) -> str:
@@ -98,17 +104,33 @@ class UsbChoiceModal(ModalScreen[str | None]):
 
 
 # ---------------------------------------------------------------------------
-# Transfer flow
+# Transfer flow helpers
 # ---------------------------------------------------------------------------
 
 async def run_god_transfer_flow(app: Any, game: GodGameItem) -> None:
-    """Orchestrate a GOD game transfer: pick method → connect → transfer."""
+    """Orchestrate a single GOD game transfer: pick method → connect → transfer.
+
+    Kept for backwards compatibility; delegates to the bulk helper with one game.
+    """
+    await run_god_bulk_transfer_flow(app, [game])
+
+
+async def run_god_bulk_transfer_flow(app: Any, games: list[GodGameItem]) -> None:
+    """Transfer one or more GOD games sequentially under a single modal.
+
+    For FTP: one connection is opened and reused across all games.
+    For USB: files are copied game-by-game to the chosen drive.
+    """
+    if not games:
+        return
+
     method: str | None = await app.push_screen_wait(GodInstallChoiceModal())
     if not method:
         return
 
     dest_root: str = app.settings.game_install_path or "Hdd:\\Content\\0000000000000000\\"
     installer = app.installer
+    total_games = len(games)
 
     if method == "ftp":
         prof = app.settings.default_profile()
@@ -117,35 +139,54 @@ async def run_god_transfer_flow(app: Any, game: GodGameItem) -> None:
             if not prof:
                 return
 
-        total_files = game.file_count
-        modal = ProgressModal(f"Transferring: {game.name}")
+        title = f"Transferring {total_games} game(s) via FTP" if total_games > 1 else f"Transferring: {games[0].name}"
+        modal = ProgressModal(title)
         await app.push_screen(modal)
+
         client = FtpClient(prof.host, prof.port, prof.username, prof.password)
-
-        _start = time.monotonic()
-
-        def cb(stage: str, cur: int, total: int) -> None:
-            elapsed = time.monotonic() - _start
-            pct = (cur / total * 100) if total > 0 else 0
-            speed = cur / elapsed if elapsed > 0 else 0
-            speed_str = f"{_fmt_bytes(int(speed))}/s" if elapsed > 1 else "…"
-            modal.set_stage(f"Transferring… {pct:.1f}%", cur, total)
-            modal.set_detail(f"{_fmt_bytes(cur)} of {_fmt_bytes(total)}  •  {speed_str}")
+        results: list[tuple[str, bool, str]] = []  # (name, success, message)
 
         try:
             await client.connect()
             app.set_connection_status(connected=True, host=f"{prof.host}:{prof.port}")
-            result: InstallResult = await installer.install_god_via_ftp(
-                game, client, dest_root, progress=cb
-            )
-            await client.disconnect()
-            modal.set_done(result.message, success=result.success)
+
+            for idx, game in enumerate(games, 1):
+                game_label = f"[{idx}/{total_games}] {game.name}" if total_games > 1 else game.name
+                modal.set_stage(f"Starting: {game_label}…", 0, 0)
+                modal.set_detail("")
+
+                _start = time.monotonic()
+
+                def cb(stage: str, cur: int, total: int, _label: str = game_label, _t: float = _start) -> None:
+                    elapsed = time.monotonic() - _t
+                    pct = (cur / total * 100) if total > 0 else 0
+                    speed = cur / elapsed if elapsed > 0 else 0
+                    speed_str = f"{_fmt_bytes(int(speed))}/s" if elapsed > 1 else "…"
+                    modal.set_stage(f"{_label} — {pct:.1f}%", cur, total)
+                    modal.set_detail(f"{_fmt_bytes(cur)} of {_fmt_bytes(total)}  •  {speed_str}")
+
+                try:
+                    result: InstallResult = await installer.install_god_via_ftp(
+                        game, client, dest_root, progress=cb
+                    )
+                    results.append((game.name, result.success, result.message))
+                except Exception as e:
+                    results.append((game.name, False, str(e)))
+
         except Exception as e:
-            modal.set_done(f"Failed: {e}", success=False)
+            modal.set_done(f"FTP connection failed: {e}", success=False)
             try:
                 await client.disconnect()
             except Exception:
                 pass
+            return
+
+        try:
+            await client.disconnect()
+        except Exception:
+            pass
+
+        _show_bulk_result(modal, results)
         return
 
     if method == "usb":
@@ -153,26 +194,61 @@ async def run_god_transfer_flow(app: Any, game: GodGameItem) -> None:
         if not usb_root:
             return
 
-        modal = ProgressModal(f"Copying to USB: {game.name}")
+        title = f"Copying {total_games} game(s) to USB" if total_games > 1 else f"Copying to USB: {games[0].name}"
+        modal = ProgressModal(title)
         await app.push_screen(modal)
 
-        _start = time.monotonic()
+        results = []
 
-        def cb(stage: str, cur: int, total: int) -> None:
-            elapsed = time.monotonic() - _start
-            pct = (cur / total * 100) if total > 0 else 0
-            speed = cur / elapsed if elapsed > 0 else 0
-            speed_str = f"{_fmt_bytes(int(speed))}/s" if elapsed > 1 else "…"
-            modal.set_stage(f"Copying… {pct:.1f}%", cur, total)
-            modal.set_detail(f"{_fmt_bytes(cur)} of {_fmt_bytes(total)}  •  {speed_str}")
+        for idx, game in enumerate(games, 1):
+            game_label = f"[{idx}/{total_games}] {game.name}" if total_games > 1 else game.name
+            modal.set_stage(f"Starting: {game_label}…", 0, 0)
+            modal.set_detail("")
 
-        try:
-            result = await installer.install_god_via_usb(
-                game, usb_root, dest_root, progress=cb
-            )
-            modal.set_done(result.message, success=result.success)
-        except Exception as e:
-            modal.set_done(f"Failed: {e}", success=False)
+            _start = time.monotonic()
+
+            def cb(stage: str, cur: int, total: int, _label: str = game_label, _t: float = _start) -> None:
+                elapsed = time.monotonic() - _t
+                pct = (cur / total * 100) if total > 0 else 0
+                speed = cur / elapsed if elapsed > 0 else 0
+                speed_str = f"{_fmt_bytes(int(speed))}/s" if elapsed > 1 else "…"
+                modal.set_stage(f"{_label} — {pct:.1f}%", cur, total)
+                modal.set_detail(f"{_fmt_bytes(cur)} of {_fmt_bytes(total)}  •  {speed_str}")
+
+            try:
+                result = await installer.install_god_via_usb(
+                    game, usb_root, dest_root, progress=cb
+                )
+                results.append((game.name, result.success, result.message))
+            except Exception as e:
+                results.append((game.name, False, str(e)))
+
+        _show_bulk_result(modal, results)
+
+
+def _show_bulk_result(modal: ProgressModal, results: list[tuple[str, bool, str]]) -> None:
+    """Update the modal with a summary of all game transfer results."""
+    if not results:
+        modal.set_done("Nothing was transferred.", success=False)
+        return
+
+    succeeded = [(n, m) for n, ok, m in results if ok]
+    failed = [(n, m) for n, ok, m in results if not ok]
+
+    if len(results) == 1:
+        name, ok, msg = results[0]
+        modal.set_done(msg, success=ok)
+        return
+
+    # Bulk summary
+    summary_parts = [f"{len(succeeded)}/{len(results)} game(s) transferred successfully."]
+    if failed:
+        fail_lines = "; ".join(f"{n}: {m}" for n, m in failed[:3])
+        if len(failed) > 3:
+            fail_lines += f" (+{len(failed) - 3} more)"
+        summary_parts.append(f"Failed: {fail_lines}")
+
+    modal.set_done(" ".join(summary_parts), success=len(failed) == 0)
 
 
 # ---------------------------------------------------------------------------
@@ -186,7 +262,11 @@ class TransferGamesScreen(Screen):
     BINDINGS = [
         Binding("escape", "back", "Back", show=True),
         Binding("slash", "focus_search", "Search", show=True),
+        Binding("space", "toggle_select", "Select", show=True),
+        Binding("a", "select_all", "All", show=True),
+        Binding("n", "select_none", "None", show=True),
         Binding("i", "transfer", "Transfer", show=True),
+        Binding("s", "sync", "Sync Missing", show=True),
         Binding("r", "refresh", "Refresh", show=True),
         Binding("q", "quit", "Quit", show=True),
     ]
@@ -194,6 +274,15 @@ class TransferGamesScreen(Screen):
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self._games: list[GodGameItem] = []
+        # Tracks which row keys in the current table view are selected for bulk transfer
+        self._selected_keys: set[str] = set()
+        # Maps row key → GodGameItem for the current table population
+        self._row_items: dict[str, GodGameItem] = {}
+        # Maps row key → RowKey object (needed for update_cell_at)
+        self._row_keys: dict[str, RowKey] = {}
+        # Snapshot of the console library at screen-open time {TITLE_ID_UPPER: ftp_path}
+        # None = library never loaded (show Unknown); empty dict = loaded but empty
+        self._console_library: dict[str, str] | None = None
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=False)
@@ -203,7 +292,10 @@ class TransferGamesScreen(Screen):
                 with Horizontal(id="filter_bar"):
                     yield Input(placeholder="Search by game name or Title ID...", id="search_input")
                     yield Button("Refresh [R]", id="refresh_btn")
-                    yield Button("Transfer", id="transfer_btn", variant="primary")
+                    yield Button("Select All [A]", id="sel_all_btn")
+                    yield Button("Select None [N]", id="sel_none_btn")
+                    yield Button("Transfer [I]", id="transfer_btn", variant="primary")
+                    yield Button("Sync Missing [S]", id="sync_btn", variant="warning")
                 yield ModTable(id="mod_table")
             with Vertical(id="browser_right"):
                 yield ModDetail(id="detail_pane")
@@ -211,6 +303,9 @@ class TransferGamesScreen(Screen):
         yield Footer()
 
     def on_mount(self) -> None:
+        # Snapshot the console library once so the column is consistent for this session
+        raw: dict[str, str] = getattr(self.app, "library", None) or {}
+        self._console_library = {k.upper(): v for k, v in raw.items()}
         self._load_games()
         self._refresh_table("")
         bar = self.query_one("#conn_bar", ConnectionBar)
@@ -224,6 +319,12 @@ class TransferGamesScreen(Screen):
         else:
             self._games = scan_god_path(god_path)
 
+    def _console_status(self, game: GodGameItem) -> str:
+        """Return the console-status cell text for *game*."""
+        if self._console_library is None:
+            return _UNKNOWN
+        return _ON_CONSOLE if game.title_id.upper() in self._console_library else _NOT_ON_CONSOLE
+
     def _refresh_table(self, query: str) -> None:
         q = query.lower()
         filtered = [
@@ -231,12 +332,29 @@ class TransferGamesScreen(Screen):
             if not q or q in g.name.lower() or q in g.title_id.lower()
         ]
 
-        columns = ["Game Name", "Title ID", "Type", "Content Type", "Files", "Size (GB)"]
+        # Preserve selections that are still in the filtered set (by title_id)
+        selected_title_ids = {
+            self._row_items[k].title_id
+            for k in self._selected_keys
+            if k in self._row_items
+        }
+
+        self._row_items.clear()
+        self._row_keys.clear()
+        self._selected_keys.clear()
+
+        columns = ["", "Console", "Game Name", "Title ID", "Type", "Content Type", "Files", "Size (GB)"]
         rows: list[tuple[Any, list[str]]] = []
-        for g in filtered:
+        for idx, g in enumerate(filtered):
+            key = str(idx)
+            checked = g.title_id in selected_title_ids
+            if checked:
+                self._selected_keys.add(key)
             rows.append((
                 g,
                 [
+                    "[green][x][/]" if checked else "[ ]",
+                    self._console_status(g),
                     g.name,
                     g.title_id,
                     g.kind,
@@ -245,17 +363,67 @@ class TransferGamesScreen(Screen):
                     f"{g.total_size_gb:.2f}",
                 ],
             ))
+            self._row_items[key] = g
 
         table = self.query_one("#mod_table", ModTable)
         table.populate(columns, rows)
 
+        # Capture the RowKey objects now that populate() has added them
+        for key in self._row_items:
+            self._row_keys[key] = RowKey(key)
+
+        self._update_status(len(filtered))
+
+    def _update_status(self, total_visible: int) -> None:
         if not self.app.settings.local_god_path:  # type: ignore[attr-defined]
-            status = "No Local GOD Path set — configure it in Settings"
+            text = "No Local GOD Path set — configure it in Settings"
         else:
-            status = f"{len(filtered)} game(s)"
-            if len(filtered) != len(self._games):
-                status += f" of {len(self._games)}"
-        self.query_one("#status_bar", StatusBar).set_text(status)
+            sel = len(self._selected_keys)
+            text = f"{total_visible} game(s)"
+            if total_visible != len(self._games):
+                text += f" of {len(self._games)}"
+            # Count missing games across the current visible set
+            if self._console_library is not None:
+                missing = sum(
+                    1 for k, g in self._row_items.items()
+                    if g.title_id.upper() not in self._console_library
+                )
+                if missing:
+                    text += f"  •  [yellow]{missing} not on console[/]"
+            if sel:
+                text += f"  •  {sel} selected"
+        self.query_one("#status_bar", StatusBar).set_text(text)
+
+    def _toggle_row_checkbox(self, key: str) -> None:
+        """Toggle the selection state of a single row and update its checkbox cell."""
+        if key not in self._row_items:
+            return
+        if key in self._selected_keys:
+            self._selected_keys.discard(key)
+            check = "[ ]"
+        else:
+            self._selected_keys.add(key)
+            check = "[green][x][/]"
+
+        table = self.query_one("#mod_table", ModTable)
+        try:
+            row_idx = table.get_row_index(self._row_keys[key])
+            table.update_cell_at((row_idx, 0), check)
+        except Exception:
+            pass
+
+        visible = sum(1 for k in self._row_items)
+        self._update_status(visible)
+
+    def _current_row_key(self) -> str | None:
+        """Return the string key of the row at the current cursor position."""
+        table = self.query_one("#mod_table", ModTable)
+        if table.row_count == 0:
+            return None
+        try:
+            return table.coordinate_to_cell_key(table.cursor_coordinate).row_key.value
+        except Exception:
+            return None
 
     # --- Events ---
 
@@ -291,6 +459,12 @@ class TransferGamesScreen(Screen):
             self.action_transfer()
         elif event.button.id == "refresh_btn":
             self.action_refresh()
+        elif event.button.id == "sel_all_btn":
+            self.action_select_all()
+        elif event.button.id == "sel_none_btn":
+            self.action_select_none()
+        elif event.button.id == "sync_btn":
+            self.action_sync()
 
     # --- Actions ---
 
@@ -307,8 +481,82 @@ class TransferGamesScreen(Screen):
     def action_quit(self) -> None:
         self.app.exit()
 
-    def action_transfer(self) -> None:
-        item = self.query_one("#mod_table", ModTable).selected_item()
-        if not isinstance(item, GodGameItem):
+    def action_toggle_select(self) -> None:
+        """Toggle selection on the currently-highlighted row (Space)."""
+        key = self._current_row_key()
+        if key is not None:
+            self._toggle_row_checkbox(key)
+
+    def action_select_all(self) -> None:
+        """Mark every visible row as selected."""
+        table = self.query_one("#mod_table", ModTable)
+        for key in list(self._row_items):
+            self._selected_keys.add(key)
+            try:
+                row_idx = table.get_row_index(self._row_keys[key])
+                table.update_cell_at((row_idx, 0), "[green][x][/]")
+            except Exception:
+                pass
+        self._update_status(len(self._row_items))
+
+    def action_select_none(self) -> None:
+        """Clear all selections."""
+        table = self.query_one("#mod_table", ModTable)
+        for key in list(self._selected_keys):
+            try:
+                row_idx = table.get_row_index(self._row_keys[key])
+                table.update_cell_at((row_idx, 0), "[ ]")
+            except Exception:
+                pass
+        self._selected_keys.clear()
+        self._update_status(len(self._row_items))
+
+    def action_sync(self) -> None:
+        """Bulk-transfer every local game that is not already on the console.
+
+        Requires a library scan to have been run at least once (Library screen → Scan).
+        If the library has never been loaded the user is informed and nothing happens.
+        """
+        if self._console_library is None:
+            self.query_one("#status_bar", StatusBar).set_text(
+                "Console library not loaded — run a Library Scan first (Library screen → Scan)"
+            )
             return
-        self.app.run_worker(run_god_transfer_flow(self.app, item), exclusive=False)
+
+        missing = [
+            self._row_items[k]
+            for k in sorted(self._row_items, key=lambda k: int(k))
+            if self._row_items[k].title_id.upper() not in self._console_library
+        ]
+
+        if not missing:
+            self.query_one("#status_bar", StatusBar).set_text(
+                "All local games are already on the console — nothing to sync."
+            )
+            return
+
+        self.app.run_worker(
+            run_god_bulk_transfer_flow(self.app, missing), exclusive=False
+        )
+
+    def action_transfer(self) -> None:
+        """Transfer selected games (bulk), or the highlighted game if none selected."""
+        if self._selected_keys:
+            games = [
+                self._row_items[k]
+                for k in sorted(self._selected_keys, key=lambda k: int(k))
+                if k in self._row_items
+            ]
+        else:
+            # Fall back to single-row transfer (original behaviour)
+            item = self.query_one("#mod_table", ModTable).selected_item()
+            if not isinstance(item, GodGameItem):
+                self.query_one("#status_bar", StatusBar).set_text(
+                    "Select at least one game first (Space to select, A to select all)"
+                )
+                return
+            games = [item]
+
+        self.app.run_worker(
+            run_god_bulk_transfer_flow(self.app, games), exclusive=False
+        )
