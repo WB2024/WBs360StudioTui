@@ -75,7 +75,77 @@ def _parse_stfs_header(path: Path) -> tuple[str | None, str, int]:
     return title_id, display_name, version
 
 
-def scan_local_title_updates(path: str | Path | None = None) -> list[TitleUpdateItem]:
+# ---------------------------------------------------------------------------
+# General-purpose STFS header reader (no content-type filter)
+# ---------------------------------------------------------------------------
+
+class StfsInfo:
+    """Parsed subset of an STFS package header."""
+    __slots__ = ("magic", "title_id", "media_id", "title_name", "error")
+
+    def __init__(
+        self,
+        magic: str = "",
+        title_id: str = "",
+        media_id: str = "",
+        title_name: str = "",
+        error: str = "",
+    ) -> None:
+        self.magic = magic
+        self.title_id = title_id
+        self.media_id = media_id
+        self.title_name = title_name
+        self.error = error
+
+    @property
+    def ok(self) -> bool:
+        return not self.error
+
+
+def read_stfs_info(path: str | Path) -> "StfsInfo":
+    """Read STFS header fields from *path* without filtering on content type.
+
+    Works on any STFS package — game files, title updates, DLC, etc.
+    Returns an :class:`StfsInfo` with ``error`` set if the file cannot be read
+    or is not a valid STFS package.
+
+    STFS header offsets (big-endian):
+        0x000  Magic (4 bytes): CON, LIVE or PIRS
+        0x354  Media ID (4 bytes)
+        0x360  Title ID (4 bytes)
+        0x411  Display name (UTF-16-BE, up to 256 bytes / 128 chars)
+    """
+    p = Path(path)
+    try:
+        with p.open("rb") as f:
+            data = f.read(0x520)
+    except FileNotFoundError:
+        return StfsInfo(error=f"File not found: {p}")
+    except OSError as e:
+        return StfsInfo(error=f"Cannot read file: {e}")
+
+    if len(data) < 0x520:
+        return StfsInfo(error="File too small to be a valid STFS package")
+
+    magic = data[0:4].decode("ascii", errors="replace").rstrip("\x00")
+    if magic not in ("CON ", "LIVE", "PIRS"):
+        return StfsInfo(error=f"Not an STFS package (magic: {magic!r})")
+
+    title_id = data[0x360:0x364].hex().upper()
+    media_id = data[0x354:0x358].hex().upper()
+    try:
+        title_name = data[0x411:0x511].decode("utf-16-be", errors="replace").rstrip("\x00").strip()
+    except Exception:
+        title_name = ""
+
+    return StfsInfo(
+        magic=magic,
+        title_id=title_id,
+        media_id=media_id,
+        title_name=title_name or p.stem,
+    )
+
+
     """Scan *path* (defaults to LocalTitleUpdates/) for TU STFS packages.
 
     Each file is inspected for a valid STFS header with content type 0x000B0000.
