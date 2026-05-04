@@ -70,7 +70,7 @@ class ConfirmDeleteModal(ModalScreen[bool]):
             yield Static(f"[b]{self._entry.name}[/b]", id="confirm_name")
             if self._entry.is_dir:
                 yield Static(
-                    "[yellow]Warning: directory must be empty or deletion will fail.[/yellow]",
+                    "[yellow]All contents will be deleted recursively.[/yellow]",
                     id="confirm_warn",
                 )
             yield Static("This cannot be undone.", id="confirm_msg")
@@ -544,10 +544,11 @@ class FtpBrowserScreen(Screen):
 
     async def _delete_worker(self, entry: FileEntry) -> None:
         if self._active == "local":
+            import shutil
             target = self._local_path / entry.name
             try:
                 if entry.is_dir:
-                    target.rmdir()
+                    shutil.rmtree(target)
                 else:
                     target.unlink()
                 self._refresh_local()
@@ -560,7 +561,7 @@ class FtpBrowserScreen(Screen):
             self._set_status(f"Deleting {entry.name}…")
             try:
                 if entry.is_dir:
-                    await self._client.remove_directory(self._join_remote(entry.name))
+                    await self._client.delete_recursive(self._join_remote(entry.name))
                 else:
                     await self._client.delete_file(self._join_remote(entry.name))
                 await self._list_remote(self._remote_path)

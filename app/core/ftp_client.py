@@ -343,6 +343,28 @@ class FtpClient:
                     pass
             await self.upload_file(local_file, remote_dest)
 
+    async def delete_recursive(self, remote_path: str) -> None:
+        """Recursively delete a remote directory and all its contents.
+
+        Walks the tree bottom-up: deletes all files first, then removes
+        directories innermost-first, finally removing the root directory.
+        """
+        if not self._client:
+            raise FtpConnectionError("Not connected")
+        # Build full inventory: (rel_path, is_dir)
+        all_entries = await self._list_detail_recursive(remote_path, "")
+        base = remote_path.rstrip("/")
+        # Delete all files first
+        for rel, is_dir, _ in all_entries:
+            if not is_dir:
+                await self.delete_file(f"{base}/{rel}")
+        # Delete directories deepest-first (reverse order = children before parents)
+        dirs = [rel for rel, is_dir, _ in all_entries if is_dir]
+        for rel in reversed(dirs):
+            await self.remove_directory(f"{base}/{rel}")
+        # Remove the root directory itself
+        await self.remove_directory(remote_path)
+
     async def download_directory(
         self,
         remote_path: str,
