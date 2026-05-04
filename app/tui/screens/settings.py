@@ -56,7 +56,10 @@ class SettingsScreen(Screen):
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=False)
-        with VerticalScroll():
+        with VerticalScroll():            # ── Top Save / Back ───────────────────────────────────────────────
+            with Horizontal():
+                yield Button("Save", id="save_settings_top", variant="success")
+                yield Button("Back", id="back_top")
             # ── Updates ──────────────────────────────────────────────────────
             yield Static("[b cyan]Updates[/]")
             yield Static(f"[dim]Current version: [bold]{app_mod.__version__}[/bold][/]")
@@ -320,7 +323,7 @@ class SettingsScreen(Screen):
                 id="title_update_install_path",
             )
 
-            # ── Save / Back ───────────────────────────────────────────────────
+            # ── Bottom Save / Back ────────────────────────────────────────────
             with Horizontal():
                 yield Button("Save", id="save_settings", variant="success")
                 yield Button("Back", id="back")
@@ -368,7 +371,7 @@ class SettingsScreen(Screen):
     async def on_button_pressed(self, event: Button.Pressed) -> None:
         bid = event.button.id
         app = self.app
-        if bid == "back":
+        if bid in ("back", "back_top"):
             self.app.pop_screen()
         elif bid == "add_profile":
             prof = await app.push_screen_wait(ConnectionScreen())
@@ -411,7 +414,7 @@ class SettingsScreen(Screen):
         elif bid == "ftp_disconnect":
             app.set_connection_status(connected=False)
             self._refresh_ftp_status()
-        elif bid == "save_settings":
+        elif bid in ("save_settings", "save_settings_top"):
             app.settings.download_dir = self.query_one("#dl_dir", Input).value
             app.settings.usb.manual_path = self.query_one("#usb_path", Input).value or None
             app.settings.aurora_path = self.query_one("#aurora_path", Input).value or "Hdd:\\Aurora\\"

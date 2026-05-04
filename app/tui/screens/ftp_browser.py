@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import asyncio
 import datetime
+import shutil
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -155,6 +157,9 @@ class FtpBrowserScreen(Screen):
       Enter      — navigate into a directory
       Backspace  — go up one level in active pane
       T          — transfer selected file (copy to the other pane)
+      C          — copy selected item to clipboard
+      X          — cut selected item to clipboard
+      V          — paste clipboard item into active pane
       N          — new folder in active pane
       R          — rename selected item in active pane
       D          — delete selected item in active pane (with confirmation)
@@ -168,6 +173,9 @@ class FtpBrowserScreen(Screen):
         Binding("tab", "switch_pane", "Switch Pane", show=True),
         Binding("backspace", "go_up", "Up", show=True),
         Binding("t", "transfer", "Transfer ⇄", show=True),
+        Binding("c", "copy", "Copy", show=True),
+        Binding("x", "cut", "Cut", show=True),
+        Binding("v", "paste", "Paste", show=True),
         Binding("n", "new_folder", "New Folder", show=True),
         Binding("r", "rename", "Rename", show=True),
         Binding("d", "delete", "Delete", show=True),
@@ -190,6 +198,12 @@ class FtpBrowserScreen(Screen):
         # "local" or "remote"
         self._active: str = "local"
 
+        # Clipboard state for copy/cut/paste
+        self._clipboard_entry: FileEntry | None = None
+        self._clipboard_src_path: Path | str | None = None  # Path for local, str for remote
+        self._clipboard_pane: str | None = None  # "local" or "remote"
+        self._clipboard_op: str | None = None    # "copy" or "cut"
+
     # -------------------------------------------------------------------------
     # Layout
     # -------------------------------------------------------------------------
@@ -208,6 +222,9 @@ class FtpBrowserScreen(Screen):
             yield Button("↑ Up", id="fm_up_btn")
             yield Button("New Folder [N]", id="fm_newfolder_btn", variant="success")
             yield Button("Rename [R]", id="fm_rename_btn")
+            yield Button("Copy [C]", id="fm_copy_btn")
+            yield Button("Cut [X]", id="fm_cut_btn", variant="warning")
+            yield Button("Paste [V]", id="fm_paste_btn", variant="primary")
             yield Button("Delete [D]", id="fm_delete_btn", variant="error")
             yield Button("⇄ Transfer [T]", id="fm_transfer_btn", variant="primary")
             yield Button("Refresh [F5]", id="fm_refresh_btn")
@@ -409,6 +426,9 @@ class FtpBrowserScreen(Screen):
             "fm_up_btn": self.action_go_up,
             "fm_newfolder_btn": self.action_new_folder,
             "fm_rename_btn": self.action_rename,
+            "fm_copy_btn": self.action_copy,
+            "fm_cut_btn": self.action_cut,
+            "fm_paste_btn": self.action_paste,
             "fm_delete_btn": self.action_delete,
             "fm_transfer_btn": self.action_transfer,
             "fm_refresh_btn": self.action_refresh,
@@ -544,7 +564,6 @@ class FtpBrowserScreen(Screen):
 
     async def _delete_worker(self, entry: FileEntry) -> None:
         if self._active == "local":
-            import shutil
             target = self._local_path / entry.name
             try:
                 if entry.is_dir:
@@ -567,6 +586,197 @@ class FtpBrowserScreen(Screen):
                 await self._list_remote(self._remote_path)
             except FtpTransferError as e:
                 self._set_status(f"Delete failed: {e}")
+
+    # -------------------------------------------------------------------------
+    # Copy / Cut / Paste
+    # -------------------------------------------------------------------------
+
+    def action_copy(self) -> None:
+        entry = self._active_selected()
+        if entry is None:
+            self._set_status("Select an item to copy.")
+            return
+        self._clipboard_entry = entry
+        self._clipboard_pane = self._active
+        self._clipboard_src_path = (
+            self._local_path / entry.name if self._active == "local"
+            else self._join_remote(entry.name)
+        )
+        self._clipboard_op = "copy"
+        self._set_status(f"[COPY] {entry.name}  —  navigate to destination pane/folder and press V to paste.")
+
+    def action_cut(self) -> None:
+        entry = self._active_selected()
+        if entry is None:
+            self._set_status("Select an item to cut.")
+            return
+        self._clipboard_entry = entry
+        self._clipboard_pane = self._active
+        self._clipboard_src_path = (
+            self._local_path / entry.name if self._active == "local"
+            else self._join_remote(entry.name)
+        )
+        self._clipboard_op = "cut"
+        self._set_status(f"[CUT]  {entry.name}  —  navigate to destination pane/folder and press V to paste.")
+
+    def action_paste(self) -> None:
+        if self._clipboard_entry is None:
+            self._set_status("Clipboard is empty — use C to copy or X to cut first.")
+            return
+        asyncio.ensure_future(self._paste_worker())
+
+    async def _paste_worker(self) -> None:  # noqa: C901
+        entry = self._clipboard_entry
+        src_pane = self._clipboard_pane
+        op = self._clipboard_op
+        is_cut = op == "cut"
+
+        if entry is None:
+            return
+
+        # ---- local → local ------------------------------------------------
+        if src_pane == "local" and self._active == "local":
+            src = Path(self._clipboard_src_path)  # type: ignore[arg-type]
+            dst = self._local_path / entry.name
+            if src == dst:
+                self._set_status("Source and destination are the same folder — nothing to do.")
+                return
+            verb = "Moving" if is_cut else "Copying"
+            self._set_status(f"{verb} {entry.name}…")
+            try:
+                if is_cut:
+                    shutil.move(str(src), str(dst))
+                    self._clipboard_entry = None
+                    self._clipboard_src_path = None
+                else:
+                    if entry.is_dir:
+                        shutil.copytree(str(src), str(dst))
+                    else:
+                        shutil.copy2(str(src), str(dst))
+                self._refresh_local()
+                self._set_status(f"{'Moved' if is_cut else 'Copied'} {entry.name}.")
+            except OSError as e:
+                self._set_status(f"{'Move' if is_cut else 'Copy'} failed: {e}")
+            return
+
+        # ---- remote → remote ----------------------------------------------
+        # Aurora's FTP server does not support RNFR/RNTO for cross-directory
+        # moves (returns 250 instead of the expected 350 to RNFR).  We work
+        # around this by downloading to a temp dir, uploading to the new
+        # location, then — for a cut — deleting the source using the same
+        # recursive tree-walk already used by the Delete action.
+        if src_pane == "remote" and self._active == "remote":
+            if not self._client:
+                self._set_status("Not connected to console.")
+                return
+            src_ftp = str(self._clipboard_src_path)
+            dst_ftp = self._remote_path.rstrip("/") + "/" + entry.name
+            if src_ftp.rstrip("/") == dst_ftp.rstrip("/"):
+                self._set_status("Source and destination are the same — nothing to do.")
+                return
+            verb = "Moving" if is_cut else "Copying"
+            modal = ProgressModal(title=f"{verb}: {entry.name}")
+            await self.app.push_screen(modal)
+            try:
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    tmp_path = Path(tmpdir) / entry.name
+                    if entry.is_dir:
+                        def _dl_dir(done: int, total: int, rel: str) -> None:
+                            lbl = f"[{done + 1}/{total}] {rel}" if total else rel
+                            modal.set_stage(f"Downloading {lbl}", done, total or 1)
+                        await self._client.download_directory(src_ftp, tmp_path, progress_callback=_dl_dir)
+                        def _ul_dir(done: int, total: int, rel: str) -> None:
+                            lbl = f"[{done + 1}/{total}] {rel}" if total else rel
+                            modal.set_stage(f"Uploading {lbl}", done, total or 1)
+                        await self._client.upload_directory(tmp_path, dst_ftp, progress_callback=_ul_dir)
+                    else:
+                        def _dl_file(recv: int, total: int) -> None:
+                            modal.set_stage(f"Downloading {entry.name}…", recv, total or entry.size)
+                        await self._client.download_file(src_ftp, tmp_path, total_size=entry.size, progress_callback=_dl_file)
+                        def _ul_file(sent: int, total: int) -> None:
+                            modal.set_stage(f"Uploading {entry.name}…", sent, total or entry.size)
+                        await self._client.upload_file(tmp_path, dst_ftp, progress_callback=_ul_file)
+                if is_cut:
+                    # Delete source using the recursive tree-walk (Aurora FTP
+                    # requires individual DELE per file before RMD on a dir).
+                    modal.set_stage(f"Removing source {entry.name}…", 0, 1)
+                    if entry.is_dir:
+                        await self._client.delete_recursive(src_ftp)
+                    else:
+                        await self._client.delete_file(src_ftp)
+                    self._clipboard_entry = None
+                    self._clipboard_src_path = None
+                modal.set_done(f"{'Moved' if is_cut else 'Copied'} {entry.name}.", success=True)
+                await self._list_remote(self._remote_path)
+            except (FtpTransferError, FtpConnectionError) as e:
+                modal.set_done(f"{'Move' if is_cut else 'Copy'} failed: {e}", success=False)
+            return
+
+        # ---- local → remote -----------------------------------------------
+        if src_pane == "local" and self._active == "remote":
+            if not self._client:
+                self._set_status("Not connected to console.")
+                return
+            local_src = Path(self._clipboard_src_path)  # type: ignore[arg-type]
+            remote_dst = self._remote_path.rstrip("/") + "/" + entry.name
+            verb = "Moving" if is_cut else "Copying"
+            modal = ProgressModal(title=f"{verb}: {entry.name}")
+            await self.app.push_screen(modal)
+            try:
+                if entry.is_dir:
+                    def _ul_dir2(done: int, total: int, rel: str) -> None:
+                        lbl = f"[{done + 1}/{total}] {rel}" if total else rel
+                        modal.set_stage(f"Uploading {lbl}", done, total or 1)
+                    await self._client.upload_directory(local_src, remote_dst, progress_callback=_ul_dir2)
+                else:
+                    def _ul_file2(sent: int, total: int) -> None:
+                        modal.set_stage(f"Uploading {entry.name}…", sent, total or entry.size)
+                    await self._client.upload_file(local_src, remote_dst, progress_callback=_ul_file2)
+                if is_cut:
+                    if entry.is_dir:
+                        shutil.rmtree(str(local_src))
+                    else:
+                        local_src.unlink()
+                    self._clipboard_entry = None
+                    self._clipboard_src_path = None
+                    self._refresh_local()
+                modal.set_done(f"{'Moved' if is_cut else 'Copied'} {entry.name}.", success=True)
+                await self._list_remote(self._remote_path)
+            except (FtpTransferError, FtpConnectionError, OSError) as e:
+                modal.set_done(f"{'Move' if is_cut else 'Copy'} failed: {e}", success=False)
+            return
+
+        # ---- remote → local -----------------------------------------------
+        if not self._client:
+            self._set_status("Not connected to console.")
+            return
+        remote_src = str(self._clipboard_src_path)
+        local_dst = self._local_path / entry.name
+        verb = "Moving" if is_cut else "Copying"
+        modal = ProgressModal(title=f"{verb}: {entry.name}")
+        await self.app.push_screen(modal)
+        try:
+            if entry.is_dir:
+                def _dl_dir2(done: int, total: int, rel: str) -> None:
+                    lbl = f"[{done + 1}/{total}] {rel}" if total else rel
+                    modal.set_stage(f"Downloading {lbl}", done, total or 1)
+                await self._client.download_directory(remote_src, local_dst, progress_callback=_dl_dir2)
+            else:
+                def _dl_file2(recv: int, total: int) -> None:
+                    modal.set_stage(f"Downloading {entry.name}…", recv, total or entry.size)
+                await self._client.download_file(remote_src, local_dst, total_size=entry.size, progress_callback=_dl_file2)
+            if is_cut:
+                if entry.is_dir:
+                    await self._client.delete_recursive(remote_src)
+                else:
+                    await self._client.delete_file(remote_src)
+                self._clipboard_entry = None
+                self._clipboard_src_path = None
+                await self._list_remote(self._remote_path)
+            modal.set_done(f"{'Moved' if is_cut else 'Copied'} {entry.name}.", success=True)
+            self._refresh_local()
+        except (FtpTransferError, FtpConnectionError) as e:
+            modal.set_done(f"{'Move' if is_cut else 'Copy'} failed: {e}", success=False)
 
     # -------------------------------------------------------------------------
     # Transfer action (copy between panes)
