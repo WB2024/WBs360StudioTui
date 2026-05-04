@@ -74,6 +74,17 @@ class SettingsScreen(Screen):
                 yield Button("Check for Updates", id="check_updates", variant="primary")
                 yield Static("", id="update_status")
 
+            # ── Web Server ────────────────────────────────────────────────────
+            yield Static("\n[b cyan]Web Server[/]")
+            yield Static("[dim]Serve the TUI in a browser via WebSocket. Restart the app to apply changes.[/]")
+            with Horizontal():
+                yield Label("Enable web server  ")
+                yield Switch(value=self.app.settings.web_server_enabled, id="web_server_enabled")
+            yield Static("[dim]Host — use 0.0.0.0 to allow LAN access, 127.0.0.1 for localhost only.[/]")
+            yield Input(value=self.app.settings.web_server_host, placeholder="0.0.0.0", id="web_server_host")
+            yield Static("[dim]Port[/]")
+            yield Input(value=str(self.app.settings.web_server_port), placeholder="8360", id="web_server_port")
+
             # ── Connection Profiles ───────────────────────────────────────────
             yield Static("\n[b cyan]Connection Profiles[/]")
             yield ListView(id="profiles_list")
@@ -438,6 +449,12 @@ class SettingsScreen(Screen):
             sel = self.query_one("#update_channel", Select)
             if sel.value and sel.value is not Select.BLANK:
                 app.settings.update_channel = str(sel.value)
+            app.settings.web_server_enabled = self.query_one("#web_server_enabled", Switch).value
+            app.settings.web_server_host = self.query_one("#web_server_host", Input).value.strip() or "0.0.0.0"
+            try:
+                app.settings.web_server_port = int(self.query_one("#web_server_port", Input).value or "8360")
+            except ValueError:
+                app.settings.web_server_port = 8360
             save_settings(app.settings)
         elif bid == "refresh_db":
             self.run_worker(self._refresh_db_worker(), exclusive=True)

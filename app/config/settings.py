@@ -91,6 +91,10 @@ class Settings:
     cheat_install_path: str = ""
     patch_install_path: str = ""
     title_update_install_path: str = ""
+    # Web server
+    web_server_enabled: bool = False
+    web_server_host: str = "0.0.0.0"
+    web_server_port: int = 8360
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -130,6 +134,9 @@ class Settings:
             "cheat_install_path": self.cheat_install_path,
             "patch_install_path": self.patch_install_path,
             "title_update_install_path": self.title_update_install_path,
+            "web_server_enabled": self.web_server_enabled,
+            "web_server_host": self.web_server_host,
+            "web_server_port": self.web_server_port,
         }
 
     @classmethod
@@ -175,6 +182,9 @@ class Settings:
             cheat_install_path=d.get("cheat_install_path", ""),
             patch_install_path=d.get("patch_install_path", ""),
             title_update_install_path=d.get("title_update_install_path", ""),
+            web_server_enabled=bool(d.get("web_server_enabled", False)),
+            web_server_host=d.get("web_server_host", "0.0.0.0"),
+            web_server_port=int(d.get("web_server_port", 8360)),
         )
 
     # --- Profile mgmt ---
