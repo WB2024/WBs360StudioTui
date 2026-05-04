@@ -574,12 +574,7 @@ class FtpBrowserScreen(Screen):
     def action_transfer(self) -> None:
         entry = self._active_selected()
         if entry is None:
-            self._set_status("Select a file to transfer.")
-            return
-        if entry.is_dir:
-            self._set_status(
-                "Directory transfer not supported — select individual files to transfer."
-            )
+            self._set_status("Select a file or folder to transfer.")
             return
         if not self._client:
             self._set_status("Not connected to console — cannot transfer.")
@@ -588,34 +583,68 @@ class FtpBrowserScreen(Screen):
 
     async def _transfer_worker(self, entry: FileEntry) -> None:
         if self._active == "local":
-            # Upload: local → remote
             local_src = self._local_path / entry.name
             remote_dest = self._join_remote(entry.name)
-            modal = ProgressModal(title=f"Uploading: {entry.name}")
-            await self.app.push_screen(modal)
-            try:
-                def _up_cb(sent: int, total: int) -> None:
-                    modal.set_stage(f"Uploading {entry.name}…", sent, total or entry.size)
+            if entry.is_dir:
+                # Recursive upload: local folder → console
+                modal = ProgressModal(title=f"Uploading folder: {entry.name}")
+                await self.app.push_screen(modal)
+                try:
+                    def _udir_cb(done: int, total: int, rel: str) -> None:
+                        label = f"[{done + 1}/{total}] {rel}" if total else rel
+                        modal.set_stage(label, done, total or 1)
 
-                await self._client.upload_file(local_src, remote_dest, progress_callback=_up_cb)  # type: ignore[arg-type]
-                modal.set_done(f"Uploaded to {remote_dest}", success=True)
-                await self._list_remote(self._remote_path)
-            except (FtpTransferError, FtpConnectionError) as e:
-                modal.set_done(f"Upload failed: {e}", success=False)
+                    await self._client.upload_directory(  # type: ignore[attr-defined]
+                        local_src, remote_dest, progress_callback=_udir_cb
+                    )
+                    modal.set_done(f"Uploaded {entry.name}/ to {remote_dest}", success=True)
+                    await self._list_remote(self._remote_path)
+                except (FtpTransferError, FtpConnectionError) as e:
+                    modal.set_done(f"Upload failed: {e}", success=False)
+            else:
+                # Single file upload
+                modal = ProgressModal(title=f"Uploading: {entry.name}")
+                await self.app.push_screen(modal)
+                try:
+                    def _up_cb(sent: int, total: int) -> None:
+                        modal.set_stage(f"Uploading {entry.name}…", sent, total or entry.size)
+
+                    await self._client.upload_file(local_src, remote_dest, progress_callback=_up_cb)  # type: ignore[arg-type]
+                    modal.set_done(f"Uploaded to {remote_dest}", success=True)
+                    await self._list_remote(self._remote_path)
+                except (FtpTransferError, FtpConnectionError) as e:
+                    modal.set_done(f"Upload failed: {e}", success=False)
         else:
-            # Download: remote → local
             remote_src = self._join_remote(entry.name)
             local_dest = self._local_path / entry.name
-            modal = ProgressModal(title=f"Downloading: {entry.name}")
-            await self.app.push_screen(modal)
-            try:
-                def _dl_cb(received: int, total: int) -> None:
-                    modal.set_stage(f"Downloading {entry.name}…", received, total or entry.size)
+            if entry.is_dir:
+                # Recursive download: console folder → local
+                modal = ProgressModal(title=f"Downloading folder: {entry.name}")
+                await self.app.push_screen(modal)
+                try:
+                    def _ddir_cb(done: int, total: int, rel: str) -> None:
+                        label = f"[{done + 1}/{total}] {rel}" if total else rel
+                        modal.set_stage(label, done, total or 1)
 
-                await self._client.download_file(
-                    remote_src, local_dest, total_size=entry.size, progress_callback=_dl_cb
-                )
-                modal.set_done(f"Saved to {local_dest}", success=True)
-                self._refresh_local()
-            except (FtpTransferError, FtpConnectionError) as e:
-                modal.set_done(f"Download failed: {e}", success=False)
+                    await self._client.download_directory(  # type: ignore[attr-defined]
+                        remote_src, local_dest, progress_callback=_ddir_cb
+                    )
+                    modal.set_done(f"Saved {entry.name}/ to {local_dest}", success=True)
+                    self._refresh_local()
+                except (FtpTransferError, FtpConnectionError) as e:
+                    modal.set_done(f"Download failed: {e}", success=False)
+            else:
+                # Single file download
+                modal = ProgressModal(title=f"Downloading: {entry.name}")
+                await self.app.push_screen(modal)
+                try:
+                    def _dl_cb(received: int, total: int) -> None:
+                        modal.set_stage(f"Downloading {entry.name}…", received, total or entry.size)
+
+                    await self._client.download_file(
+                        remote_src, local_dest, total_size=entry.size, progress_callback=_dl_cb
+                    )
+                    modal.set_done(f"Saved to {local_dest}", success=True)
+                    self._refresh_local()
+                except (FtpTransferError, FtpConnectionError) as e:
+                    modal.set_done(f"Download failed: {e}", success=False)

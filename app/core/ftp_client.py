@@ -294,3 +294,77 @@ class FtpClient:
             raise FtpTransferError(f"Download timed out for {remote_path}") from e
         except aioftp.AIOFTPException as e:
             raise FtpTransferError(f"Download failed for {remote_path}: {e}") from e
+
+    # ------------------------------------------------------------------
+    # Recursive directory helpers
+    # ------------------------------------------------------------------
+
+    async def _list_detail_recursive(
+        self, remote_path: str, rel_prefix: str
+    ) -> list[tuple[str, bool, int]]:
+        """Return (rel_path, is_dir, size) for every entry under remote_path, recursively."""
+        results: list[tuple[str, bool, int]] = []
+        try:
+            entries = await self.list_detail(remote_path)
+        except FtpTransferError:
+            return results
+        for name, is_dir, size, _ in entries:
+            rel = f"{rel_prefix}/{name}" if rel_prefix else name
+            results.append((rel, is_dir, size))
+            if is_dir:
+                sub_path = remote_path.rstrip("/") + "/" + name
+                sub = await self._list_detail_recursive(sub_path, rel)
+                results.extend(sub)
+        return results
+
+    async def upload_directory(
+        self,
+        local_path: str | Path,
+        remote_path: str,
+        progress_callback: Optional[Callable[[int, int, str], None]] = None,
+    ) -> None:
+        """Recursively upload a local directory tree to remote_path.
+
+        progress_callback(files_done, files_total, rel_path) is called before each upload.
+        """
+        if not self._client:
+            raise FtpConnectionError("Not connected")
+        local_path = Path(local_path)
+        all_files = sorted(p for p in local_path.rglob("*") if p.is_file())
+        total = len(all_files)
+        await self.make_directory(remote_path)
+        for i, local_file in enumerate(all_files):
+            rel = local_file.relative_to(local_path).as_posix()
+            remote_dest = remote_path.rstrip("/") + "/" + rel
+            if progress_callback:
+                try:
+                    progress_callback(i, total, rel)
+                except Exception:
+                    pass
+            await self.upload_file(local_file, remote_dest)
+
+    async def download_directory(
+        self,
+        remote_path: str,
+        local_path: str | Path,
+        progress_callback: Optional[Callable[[int, int, str], None]] = None,
+    ) -> None:
+        """Recursively download a remote directory tree to local_path.
+
+        progress_callback(files_done, files_total, rel_path) is called before each download.
+        """
+        if not self._client:
+            raise FtpConnectionError("Not connected")
+        local_path = Path(local_path)
+        all_entries = await self._list_detail_recursive(remote_path, "")
+        files = [(rel, size) for rel, is_dir, size in all_entries if not is_dir]
+        total = len(files)
+        for i, (rel, size) in enumerate(files):
+            remote_src = remote_path.rstrip("/") + "/" + rel
+            local_dest = local_path / rel
+            if progress_callback:
+                try:
+                    progress_callback(i, total, rel)
+                except Exception:
+                    pass
+            await self.download_file(remote_src, local_dest, total_size=size)
