@@ -73,8 +73,14 @@ class Settings:
     auto_update: bool = True
     update_channel: str = "latest"  # 'latest' | 'pre-release'
     backup_dir: str = ""
-    # Local content source root (all Local*/ folders resolve relative to this)
-    local_content_root: str = ""
+    # Individual local content source paths (empty = use default Local*/ folder in app directory)
+    local_mods_path: str = ""
+    local_trainers_path: str = ""
+    local_homebrew_path: str = ""
+    local_game_saves_path: str = ""
+    local_patches_path: str = ""
+    local_cheats_path: str = ""
+    local_title_updates_path: str = ""
     # Torrent watch folder (overrides bundled Torrent/ in repo root)
     torrent_folder: str = ""
     # Console install path overrides for local content (empty = use DB defaults)
@@ -109,7 +115,13 @@ class Settings:
             "auto_update": self.auto_update,
             "update_channel": self.update_channel,
             "backup_dir": self.backup_dir,
-            "local_content_root": self.local_content_root,
+            "local_mods_path": self.local_mods_path,
+            "local_trainers_path": self.local_trainers_path,
+            "local_homebrew_path": self.local_homebrew_path,
+            "local_game_saves_path": self.local_game_saves_path,
+            "local_patches_path": self.local_patches_path,
+            "local_cheats_path": self.local_cheats_path,
+            "local_title_updates_path": self.local_title_updates_path,
             "torrent_folder": self.torrent_folder,
             "mod_install_path": self.mod_install_path,
             "trainer_install_path": self.trainer_install_path,
@@ -148,7 +160,13 @@ class Settings:
             auto_update=bool(d.get("auto_update", True)),
             update_channel=d.get("update_channel", "latest"),
             backup_dir=d.get("backup_dir", ""),
-            local_content_root=d.get("local_content_root", ""),
+            local_mods_path=d.get("local_mods_path", ""),
+            local_trainers_path=d.get("local_trainers_path", ""),
+            local_homebrew_path=d.get("local_homebrew_path", ""),
+            local_game_saves_path=d.get("local_game_saves_path", ""),
+            local_patches_path=d.get("local_patches_path", ""),
+            local_cheats_path=d.get("local_cheats_path", ""),
+            local_title_updates_path=d.get("local_title_updates_path", ""),
             torrent_folder=d.get("torrent_folder", ""),
             mod_install_path=d.get("mod_install_path", ""),
             trainer_install_path=d.get("trainer_install_path", ""),

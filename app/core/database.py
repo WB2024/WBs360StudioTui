@@ -168,19 +168,19 @@ class DatabaseManager:
         self.game_patches = self._load_patches()
         # Local content
         self.local_trainers = load_local_trainers(
-            content_root=getattr(settings, "local_content_root", "") or None,
+            source_path=getattr(settings, "local_trainers_path", "") or None,
             install_path_override=getattr(settings, "trainer_install_path", ""),
         )
         self.local_mods = load_local_mods(
-            content_root=getattr(settings, "local_content_root", "") or None,
+            source_path=getattr(settings, "local_mods_path", "") or None,
             install_path_override=getattr(settings, "mod_install_path", ""),
         )
         self.local_homebrew = load_local_homebrew(
-            content_root=getattr(settings, "local_content_root", "") or None,
+            source_path=getattr(settings, "local_homebrew_path", "") or None,
             install_path_override=getattr(settings, "homebrew_install_path", ""),
         )
         self.local_game_saves = load_local_game_saves(
-            content_root=getattr(settings, "local_content_root", "") or None,
+            source_path=getattr(settings, "local_game_saves_path", "") or None,
             install_path_override=getattr(settings, "game_save_install_path", ""),
         )
 

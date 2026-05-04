@@ -122,17 +122,65 @@ class SettingsScreen(Screen):
             # ── Local Paths ───────────────────────────────────────────────────
             yield Static("\n[b cyan]Local Paths[/]")
 
-            yield Static("\n[b]Local Content Root[/]")
-            yield Static("[dim]Root folder for all Local*/ content directories (Mods, Trainers, Saves, etc.).\nLeave empty to use the app install directory (current default).[/]")
-            yield Input(
-                value=self.app.settings.local_content_root,
-                placeholder="Leave empty for default (app directory)",
-                id="local_content_root",
-            )
-
             yield Static("\n[b]Local Downloads[/]")
             yield Static("[dim]Destination for downloaded mods, homebrew, saves and other content.[/]")
             yield Input(value=self.app.settings.download_dir, id="dl_dir")
+
+            yield Static("\n[b]Local Mods Folder[/]")
+            yield Static("[dim]Folder containing local mod files. Leave empty for default (LocalMods/ in app directory).[/]")
+            yield Input(
+                value=self.app.settings.local_mods_path,
+                placeholder="e.g. /srv/Xbox360/Mods",
+                id="local_mods_path",
+            )
+
+            yield Static("\n[b]Local Trainers Folder[/]")
+            yield Static("[dim]Folder containing local trainer files. Leave empty for default (LocalTrainers/ in app directory).[/]")
+            yield Input(
+                value=self.app.settings.local_trainers_path,
+                placeholder="e.g. /home/user/Desktop/TrainerFiles",
+                id="local_trainers_path",
+            )
+
+            yield Static("\n[b]Local Homebrew Folder[/]")
+            yield Static("[dim]Folder containing local homebrew apps. Leave empty for default (LocalHomebrew/ in app directory).[/]")
+            yield Input(
+                value=self.app.settings.local_homebrew_path,
+                placeholder="e.g. /home/user/Xbox360/Homebrew",
+                id="local_homebrew_path",
+            )
+
+            yield Static("\n[b]Local Game Saves Folder[/]")
+            yield Static("[dim]Folder containing local game save files. Leave empty for default (LocalGameSaves/ in app directory).[/]")
+            yield Input(
+                value=self.app.settings.local_game_saves_path,
+                placeholder="e.g. /home/user/Xbox360/GameSaves",
+                id="local_game_saves_path",
+            )
+
+            yield Static("\n[b]Local Patches Folder[/]")
+            yield Static("[dim]Folder containing local patch TOML files. Leave empty for default (LocalPatches/ in app directory).[/]")
+            yield Input(
+                value=self.app.settings.local_patches_path,
+                placeholder="e.g. /home/user/Xbox360/Patches",
+                id="local_patches_path",
+            )
+
+            yield Static("\n[b]Local Cheats Folder[/]")
+            yield Static("[dim]Folder containing local cheat files. Leave empty for default (LocalCheats/ in app directory).[/]")
+            yield Input(
+                value=self.app.settings.local_cheats_path,
+                placeholder="e.g. /home/user/Xbox360/Cheats",
+                id="local_cheats_path",
+            )
+
+            yield Static("\n[b]Local Title Updates Folder[/]")
+            yield Static("[dim]Folder containing local STFS Title Update packages. Leave empty for default (LocalTitleUpdates/ in app directory).[/]")
+            yield Input(
+                value=self.app.settings.local_title_updates_path,
+                placeholder="e.g. /home/user/Xbox360/TitleUpdates",
+                id="local_title_updates_path",
+            )
 
             yield Static("\n[b]Local ISO Path[/]")
             yield Static("[dim]Local folder containing Xbox 360 ISO files.\nSupports flat (GameName.iso) and subfoldered ({GameName}/{GameName}.iso) layouts.[/]")
@@ -373,7 +421,13 @@ class SettingsScreen(Screen):
             app.settings.qbit_username = self.query_one("#qbit_username", Input).value.strip() or "admin"
             app.settings.qbit_password = self.query_one("#qbit_password", Input).value or "adminadmin"
             app.settings.backup_dir = self.query_one("#backup_dir", Input).value.strip()
-            app.settings.local_content_root = self.query_one("#local_content_root", Input).value.strip()
+            app.settings.local_mods_path = self.query_one("#local_mods_path", Input).value.strip()
+            app.settings.local_trainers_path = self.query_one("#local_trainers_path", Input).value.strip()
+            app.settings.local_homebrew_path = self.query_one("#local_homebrew_path", Input).value.strip()
+            app.settings.local_game_saves_path = self.query_one("#local_game_saves_path", Input).value.strip()
+            app.settings.local_patches_path = self.query_one("#local_patches_path", Input).value.strip()
+            app.settings.local_cheats_path = self.query_one("#local_cheats_path", Input).value.strip()
+            app.settings.local_title_updates_path = self.query_one("#local_title_updates_path", Input).value.strip()
             app.settings.torrent_folder = self.query_one("#torrent_folder", Input).value.strip()
             app.settings.mod_install_path = self.query_one("#mod_install_path", Input).value.strip()
             app.settings.trainer_install_path = self.query_one("#trainer_install_path", Input).value.strip()

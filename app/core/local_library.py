@@ -29,8 +29,9 @@ log = logging.getLogger(__name__)
 _REPO_ROOT = Path(__file__).parent.parent.parent
 
 
-def _local_dir(name: str, content_root: Path | None = None) -> Path:
-    return (content_root or _REPO_ROOT) / name
+def _local_dir(name: str) -> Path:
+    """Default local content folder under the app/repo root."""
+    return _REPO_ROOT / name
 
 
 # ---------------------------------------------------------------------------
@@ -46,12 +47,15 @@ def _trainer_install_path(title_id: str, stem: str, filename: str, override: str
 
 
 def load_local_trainers(
-    content_root: str | Path | None = None,
+    source_path: str | Path | None = None,
     install_path_override: str = "",
 ) -> list[TrainerGameItem]:
-    """Scan LocalTrainers/ and build TrainerGameItem objects."""
-    root = Path(content_root) if content_root else None
-    base = _local_dir("LocalTrainers", root)
+    """Scan a trainers directory and build TrainerGameItem objects.
+
+    source_path: explicit directory to scan (e.g. from settings.local_trainers_path).
+                 Falls back to LocalTrainers/ under the app directory when empty.
+    """
+    base = Path(source_path) if source_path else _local_dir("LocalTrainers")
     if not base.is_dir():
         return []
 
@@ -126,12 +130,15 @@ def _mod_files_from_dir(
 
 
 def load_local_mods(
-    content_root: str | Path | None = None,
+    source_path: str | Path | None = None,
     install_path_override: str = "",
 ) -> list[ModItemData]:
-    """Scan LocalMods/ and build ModItemData objects."""
-    root = Path(content_root) if content_root else None
-    base = _local_dir("LocalMods", root)
+    """Scan a mods directory and build ModItemData objects.
+
+    source_path: explicit directory to scan (e.g. from settings.local_mods_path).
+                 Falls back to LocalMods/ under the app directory when empty.
+    """
+    base = Path(source_path) if source_path else _local_dir("LocalMods")
     if not base.is_dir():
         return []
 
@@ -164,12 +171,15 @@ def load_local_mods(
 # ---------------------------------------------------------------------------
 
 def load_local_homebrew(
-    content_root: str | Path | None = None,
+    source_path: str | Path | None = None,
     install_path_override: str = "",
 ) -> list[ModItemData]:
-    """Scan LocalHomebrew/ and build ModItemData objects."""
-    root = Path(content_root) if content_root else None
-    base = _local_dir("LocalHomebrew", root)
+    """Scan a homebrew directory and build ModItemData objects.
+
+    source_path: explicit directory to scan (e.g. from settings.local_homebrew_path).
+                 Falls back to LocalHomebrew/ under the app directory when empty.
+    """
+    base = Path(source_path) if source_path else _local_dir("LocalHomebrew")
     if not base.is_dir():
         return []
 
@@ -201,12 +211,15 @@ def load_local_homebrew(
 # ---------------------------------------------------------------------------
 
 def load_local_game_saves(
-    content_root: str | Path | None = None,
+    source_path: str | Path | None = None,
     install_path_override: str = "",
 ) -> list[GameSaveItemData]:
-    """Scan LocalGameSaves/ and build GameSaveItemData objects."""
-    root = Path(content_root) if content_root else None
-    base = _local_dir("LocalGameSaves", root)
+    """Scan a game saves directory and build GameSaveItemData objects.
+
+    source_path: explicit directory to scan (e.g. from settings.local_game_saves_path).
+                 Falls back to LocalGameSaves/ under the app directory when empty.
+    """
+    base = Path(source_path) if source_path else _local_dir("LocalGameSaves")
     if not base.is_dir():
         return []
 
