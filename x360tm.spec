@@ -9,9 +9,10 @@ datas = []
 # Textual bundles its own widget CSS; without this the TUI renders broken.
 datas += collect_data_files("textual")
 
-# Package metadata needed by aioftp and textual at import time.
+# Package metadata needed by aioftp, textual, and textual-serve at import time.
 datas += copy_metadata("aioftp")
 datas += copy_metadata("textual")
+datas += copy_metadata("textual-serve")
 
 # App's own stylesheet.  Placed at app/tui/styles/ inside _MEIPASS so that
 # CSS_PATH = "styles/app.tcss" resolves correctly relative to app.py.
@@ -36,6 +37,8 @@ a = Analysis(
         "aioftp",
         "textual.widgets",
         "textual.app",
+        "textual_serve",
+        "textual_serve.server",
     ],
     hookspath=[],
     hooksconfig={},
