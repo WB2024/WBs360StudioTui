@@ -1,41 +1,55 @@
 """x360tm — Xbox 360 Mod Manager TUI entry point."""
 import os
 import sys
-import threading
 from pathlib import Path
 
 from app.config.settings import load_settings
 from app.tui.app import X360TuiApp
 
+_WEB_SENTINEL = "X360TM_WEB_WORKER"
 
-def _web_server_thread(host: str, port: int) -> None:
-    """Run textual-serve in a daemon thread (one instance per browser connection)."""
-    import asyncio
+
+def _run_web_server(host: str, port: int) -> None:
+    """Entry point for the web-server worker process."""
     from textual_serve.server import Server
 
     if getattr(sys, "frozen", False):
-        # PyInstaller binary — run itself
         cmd = str(Path(sys.argv[0]).resolve())
     else:
-        # Source / venv — run this script via the same interpreter
         cmd = f"{sys.executable} {Path(__file__).resolve()}"
 
-    server = Server(cmd, host=host, port=port, title="x360tm")
-    asyncio.run(server.serve())
+    Server(cmd, host=host, port=port, title="x360tm").serve()
 
 
 def main() -> None:
+    # ── Web-server worker ────────────────────────────────────────────────────
+    # When textual-serve spawns a subprocess for each browser tab it sets the
+    # environment variable X360TM_NO_WEB so that instance doesn't re-launch
+    # the web server recursively.
+    if os.environ.get(_WEB_SENTINEL) == "server":
+        # This process IS the web server — parse args and serve.
+        import json
+        args = json.loads(os.environ["X360TM_WEB_ARGS"])
+        _run_web_server(**args)
+        return
+
     settings = load_settings()
 
     if settings.web_server_enabled and not os.environ.get("X360TM_NO_WEB"):
-        # Mark env so subprocesses spawned by textual-serve don't recurse
+        import json
+        import multiprocessing
+
         os.environ["X360TM_NO_WEB"] = "1"
-        t = threading.Thread(
-            target=_web_server_thread,
+
+        args = {"host": settings.web_server_host, "port": settings.web_server_port}
+        env = {**os.environ, _WEB_SENTINEL: "server", "X360TM_WEB_ARGS": json.dumps(args)}
+
+        p = multiprocessing.Process(
+            target=_run_web_server,
             args=(settings.web_server_host, settings.web_server_port),
             daemon=True,
         )
-        t.start()
+        p.start()
 
     app = X360TuiApp()
     result = app.run()
