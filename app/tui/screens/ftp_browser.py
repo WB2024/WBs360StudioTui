@@ -660,11 +660,14 @@ class FtpBrowserScreen(Screen):
             return
 
         # ---- remote → remote ----------------------------------------------
-        # Aurora's FTP server does not support RNFR/RNTO for cross-directory
-        # moves (returns 250 instead of the expected 350 to RNFR).  We work
-        # around this by downloading to a temp dir, uploading to the new
-        # location, then — for a cut — deleting the source using the same
-        # recursive tree-walk already used by the Delete action.
+        # For FILES we use RNFR/RNTO — a single server-side rename with no
+        # local transfer.
+        # For DIRECTORIES Aurora's FTP server cannot rename across paths (it
+        # returns 250 to RNFR instead of the required 350, same limitation as
+        # RMD on a non-empty dir).  Aurora's own file manager avoids this by
+        # using direct XDK filesystem access rather than FTP.  We therefore
+        # fall back to download-to-temp → upload → delete_recursive for dirs,
+        # exactly as the Delete action does for recursive removal.
         if src_pane == "remote" and self._active == "remote":
             if not self._client:
                 self._set_status("Not connected to console.")
@@ -674,6 +677,23 @@ class FtpBrowserScreen(Screen):
             if src_ftp.rstrip("/") == dst_ftp.rstrip("/"):
                 self._set_status("Source and destination are the same — nothing to do.")
                 return
+
+            if is_cut and not entry.is_dir:
+                # --- Fast path: server-side file rename (RNFR/RNTO) ---
+                self._set_status(f"Moving {entry.name}…")
+                try:
+                    await self._client.rename(src_ftp, dst_ftp)
+                    self._clipboard_entry = None
+                    self._clipboard_src_path = None
+                    await self._list_remote(self._remote_path)
+                    self._set_status(f"Moved {entry.name}.")
+                except FtpTransferError as e:
+                    self._set_status(f"Move failed: {e}")
+                return
+
+            # --- Slow path: download → temp → upload (+ delete for cut) ---
+            # Required for: all copies (FTP has no native COPY command) and
+            # all directory moves (Aurora can't RNFR/RNTO a directory).
             verb = "Moving" if is_cut else "Copying"
             modal = ProgressModal(title=f"{verb}: {entry.name}")
             await self.app.push_screen(modal)
@@ -697,13 +717,8 @@ class FtpBrowserScreen(Screen):
                             modal.set_stage(f"Uploading {entry.name}…", sent, total or entry.size)
                         await self._client.upload_file(tmp_path, dst_ftp, progress_callback=_ul_file)
                 if is_cut:
-                    # Delete source using the recursive tree-walk (Aurora FTP
-                    # requires individual DELE per file before RMD on a dir).
                     modal.set_stage(f"Removing source {entry.name}…", 0, 1)
-                    if entry.is_dir:
-                        await self._client.delete_recursive(src_ftp)
-                    else:
-                        await self._client.delete_file(src_ftp)
+                    await self._client.delete_recursive(src_ftp)
                     self._clipboard_entry = None
                     self._clipboard_src_path = None
                 modal.set_done(f"{'Moved' if is_cut else 'Copied'} {entry.name}.", success=True)
