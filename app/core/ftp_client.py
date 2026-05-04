@@ -261,3 +261,36 @@ class FtpClient:
             raise FtpTransferError("Rename timed out") from e
         except aioftp.AIOFTPException as e:
             raise FtpTransferError(f"Rename failed: {e}") from e
+
+    async def download_file(
+        self,
+        remote_path: str,
+        local_path: str | Path,
+        total_size: int = 0,
+        progress_callback: Optional[ProgressCallback] = None,
+    ) -> None:
+        """Download a single file from the FTP server to a local path.
+
+        remote_path must be an absolute FTP path (e.g. '/Hdd1/Games/game.xex').
+        The local parent directory is created automatically if it does not exist.
+        """
+        if not self._client:
+            raise FtpConnectionError("Not connected")
+        local_path = Path(local_path)
+        local_path.parent.mkdir(parents=True, exist_ok=True)
+        received = 0
+        try:
+            async with self._client.download_stream(remote_path) as stream:
+                with local_path.open("wb") as f:
+                    async for chunk in stream.iter_by_block(64 * 1024):
+                        f.write(chunk)
+                        received += len(chunk)
+                        if progress_callback:
+                            try:
+                                progress_callback(received, total_size)
+                            except Exception:
+                                pass
+        except asyncio.TimeoutError as e:
+            raise FtpTransferError(f"Download timed out for {remote_path}") from e
+        except aioftp.AIOFTPException as e:
+            raise FtpTransferError(f"Download failed for {remote_path}: {e}") from e

@@ -1,8 +1,10 @@
-"""FTP File Browser screen for navigating the Xbox 360 filesystem."""
+"""FTP File Manager — dual-pane (FileZilla-style) for Xbox 360 ↔ Local transfers."""
 from __future__ import annotations
 
 import asyncio
+import datetime
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from textual import work
@@ -14,20 +16,21 @@ from textual.widgets import Button, DataTable, Footer, Header, Input, Static
 
 from app.core.ftp_client import FtpClient, FtpConnectionError, FtpTransferError
 from app.tui.widgets.connection_bar import ConnectionBar
+from app.tui.widgets.progress_modal import ProgressModal
 from app.tui.widgets.status_bar import StatusBar
 
 
 # ---------------------------------------------------------------------------
-# Data model
+# Shared data model
 # ---------------------------------------------------------------------------
 
 @dataclass
-class FtpEntry:
-    """Represents a single file or directory in the remote listing."""
+class FileEntry:
+    """A file/directory entry for either pane (local or remote)."""
     name: str
     is_dir: bool
-    size: int = 0      # bytes; 0 for directories
-    modified: str = "" # formatted "YYYY-MM-DD HH:MM" or ""
+    size: int = 0       # bytes; 0 for directories
+    modified: str = ""  # formatted "YYYY-MM-DD HH:MM" or ""
 
     @property
     def size_str(self) -> str:
@@ -40,8 +43,7 @@ class FtpEntry:
             return f"{b / 1024:.1f} KB"
         elif b < 1024 ** 3:
             return f"{b / 1024 ** 2:.1f} MB"
-        else:
-            return f"{b / 1024 ** 3:.2f} GB"
+        return f"{b / 1024 ** 3:.2f} GB"
 
     @property
     def display_name(self) -> str:
@@ -57,7 +59,7 @@ class ConfirmDeleteModal(ModalScreen[bool]):
 
     BINDINGS = [("escape", "cancel", "Cancel")]
 
-    def __init__(self, entry: FtpEntry) -> None:
+    def __init__(self, entry: FileEntry) -> None:
         super().__init__()
         self._entry = entry
 
@@ -146,21 +148,26 @@ class NewFolderModal(ModalScreen[str | None]):
 # ---------------------------------------------------------------------------
 
 class FtpBrowserScreen(Screen):
-    """Navigate the Xbox 360 filesystem over FTP.
+    """Dual-pane file manager: local filesystem (left) vs Xbox 360 console (right).
 
     Keys:
-      Enter / → — navigate into a directory
-      Backspace  — go up one level
-      R          — rename selected item
-      D          — delete selected item (with confirmation)
-      F5         — refresh current directory
-      Esc        — go back to main menu (disconnects)
+      Tab        — switch active pane
+      Enter      — navigate into a directory
+      Backspace  — go up one level in active pane
+      T          — transfer selected file (copy to the other pane)
+      N          — new folder in active pane
+      R          — rename selected item in active pane
+      D          — delete selected item in active pane (with confirmation)
+      F5         — refresh active pane
+      Esc        — go back to main menu
     """
 
-    TITLE = "FTP File Browser"
+    TITLE = "File Manager"
     BINDINGS = [
         Binding("escape", "back", "Back", show=True),
+        Binding("tab", "switch_pane", "Switch Pane", show=True),
         Binding("backspace", "go_up", "Up", show=True),
+        Binding("t", "transfer", "Transfer ⇄", show=True),
         Binding("n", "new_folder", "New Folder", show=True),
         Binding("r", "rename", "Rename", show=True),
         Binding("d", "delete", "Delete", show=True),
@@ -171,40 +178,133 @@ class FtpBrowserScreen(Screen):
     def __init__(self, **kwargs: Any) -> None:
         super().__init__(**kwargs)
         self._client: FtpClient | None = None
-        self._path: str = "/"
-        self._entries: list[FtpEntry] = []
 
-    # --- Layout ---
+        # Remote pane state
+        self._remote_path: str = "/"
+        self._remote_entries: list[FileEntry] = []
+
+        # Local pane state (start in user's home directory)
+        self._local_path: Path = Path.home()
+        self._local_entries: list[FileEntry] = []
+
+        # "local" or "remote"
+        self._active: str = "local"
+
+    # -------------------------------------------------------------------------
+    # Layout
+    # -------------------------------------------------------------------------
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=False)
         yield ConnectionBar(id="conn_bar")
-        yield Static("  📂 [b cyan]/[/b cyan]", id="fb_path_bar")
-        with Horizontal(id="fb_toolbar"):
-            yield Button("↑ Up", id="fb_up_btn")
-            yield Button("New Folder [N]", id="fb_newfolder_btn", variant="success")
-            yield Button("Rename [R]", id="fb_rename_btn")
-            yield Button("Delete [D]", id="fb_delete_btn", variant="error")
-            yield Button("Refresh [F5]", id="fb_refresh_btn")
-        yield DataTable(id="fb_table", cursor_type="row")
+        with Horizontal(id="fm_panels"):
+            with Vertical(id="fm_local_panel", classes="panel-active"):
+                yield Static("", id="fm_local_path_bar", classes="panel-path-bar")
+                yield DataTable(id="fm_local_table", cursor_type="row")
+            with Vertical(id="fm_remote_panel"):
+                yield Static("  🎮 [dim]Connecting…[/dim]", id="fm_remote_path_bar", classes="panel-path-bar")
+                yield DataTable(id="fm_remote_table", cursor_type="row")
+        with Horizontal(id="fm_toolbar"):
+            yield Button("↑ Up", id="fm_up_btn")
+            yield Button("New Folder [N]", id="fm_newfolder_btn", variant="success")
+            yield Button("Rename [R]", id="fm_rename_btn")
+            yield Button("Delete [D]", id="fm_delete_btn", variant="error")
+            yield Button("⇄ Transfer [T]", id="fm_transfer_btn", variant="primary")
+            yield Button("Refresh [F5]", id="fm_refresh_btn")
         yield StatusBar(id="status_bar")
         yield Footer()
 
     def on_mount(self) -> None:
-        table = self.query_one("#fb_table", DataTable)
-        table.add_columns("Name", "Size", "Modified")
+        for tbl_id in ("fm_local_table", "fm_remote_table"):
+            tbl = self.query_one(f"#{tbl_id}", DataTable)
+            tbl.add_columns("Name", "Size", "Modified")
+
         bar = self.query_one("#conn_bar", ConnectionBar)
         s = self.app.connection_status  # type: ignore[attr-defined]
         bar.set_status(connected=s["connected"], text=s["text"])
-        self._connect_and_list()
 
-    # --- Connection & listing ---
+        self._refresh_local()
+        self._connect_and_list()
+        self.query_one("#fm_local_table", DataTable).focus()
+
+    # -------------------------------------------------------------------------
+    # Helpers
+    # -------------------------------------------------------------------------
+
+    def _set_status(self, msg: str) -> None:
+        try:
+            self.query_one("#status_bar", StatusBar).set_text(msg)
+        except Exception:
+            pass
+
+    def _local_selected(self) -> FileEntry | None:
+        tbl = self.query_one("#fm_local_table", DataTable)
+        idx = tbl.cursor_row
+        if 0 <= idx < len(self._local_entries):
+            return self._local_entries[idx]
+        return None
+
+    def _remote_selected(self) -> FileEntry | None:
+        tbl = self.query_one("#fm_remote_table", DataTable)
+        idx = tbl.cursor_row
+        if 0 <= idx < len(self._remote_entries):
+            return self._remote_entries[idx]
+        return None
+
+    def _active_selected(self) -> FileEntry | None:
+        return self._local_selected() if self._active == "local" else self._remote_selected()
+
+    def _join_remote(self, name: str) -> str:
+        return self._remote_path.rstrip("/") + "/" + name
+
+    def _remote_parent(self) -> str:
+        parts = self._remote_path.rstrip("/").rsplit("/", 1)
+        return parts[0] if parts[0] else "/"
+
+    def _update_pane_styles(self) -> None:
+        local_panel = self.query_one("#fm_local_panel")
+        remote_panel = self.query_one("#fm_remote_panel")
+        if self._active == "local":
+            local_panel.add_class("panel-active")
+            remote_panel.remove_class("panel-active")
+        else:
+            remote_panel.add_class("panel-active")
+            local_panel.remove_class("panel-active")
+
+    # -------------------------------------------------------------------------
+    # Local pane
+    # -------------------------------------------------------------------------
+
+    def _refresh_local(self) -> None:
+        self._local_entries = self._build_local_entries(self._local_path)
+        self._populate_pane("local")
+
+    def _build_local_entries(self, path: Path) -> list[FileEntry]:
+        entries: list[FileEntry] = []
+        try:
+            items = sorted(path.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower()))
+        except PermissionError:
+            return []
+        for item in items:
+            try:
+                stat = item.stat()
+                size = stat.st_size if item.is_file() else 0
+                modified = datetime.datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M")
+            except OSError:
+                size = 0
+                modified = ""
+            entries.append(FileEntry(name=item.name, is_dir=item.is_dir(), size=size, modified=modified))
+        return entries
+
+    # -------------------------------------------------------------------------
+    # Remote pane
+    # -------------------------------------------------------------------------
 
     @work(exclusive=True, exit_on_error=False)
     async def _connect_and_list(self) -> None:
         prof = self.app.settings.default_profile()  # type: ignore[attr-defined]
         if prof is None:
-            self._set_status("No connection profile configured — add one in Settings.")
+            self._set_status("No connection profile — add one in Settings.")
             return
         self._set_status(f"Connecting to {prof.host}:{prof.port}…")
         try:
@@ -213,12 +313,15 @@ class FtpBrowserScreen(Screen):
         except FtpConnectionError as e:
             self._client = None
             self._set_status(f"Connection failed: {e}")
+            self.query_one("#fm_remote_path_bar", Static).update(
+                "  🎮 [red]Not connected[/red]"
+            )
             return
-        await self._list_path("/")
+        await self._list_remote("/")
 
-    async def _list_path(self, path: str) -> None:
+    async def _list_remote(self, path: str) -> None:
         if not self._client:
-            self._set_status("Not connected.")
+            self._set_status("Not connected to console.")
             return
         self._set_status(f"Loading {path}…")
         try:
@@ -227,7 +330,7 @@ class FtpBrowserScreen(Screen):
             self._set_status(f"Error listing {path}: {e}")
             return
 
-        entries: list[FtpEntry] = []
+        entries: list[FileEntry] = []
         for name, is_dir, size, modified in raw:
             # Format: YYYYMMDDHHMMSS → YYYY-MM-DD HH:MM
             if len(modified) >= 12:
@@ -237,55 +340,78 @@ class FtpBrowserScreen(Screen):
                 )
             else:
                 modified = ""
-            entries.append(FtpEntry(name=name, is_dir=is_dir, size=size, modified=modified))
+            entries.append(FileEntry(name=name, is_dir=is_dir, size=size, modified=modified))
 
-        # Dirs first, then files — both alphabetically
         entries.sort(key=lambda e: (not e.is_dir, e.name.lower()))
-        self._entries = entries
-        self._path = path
-        self._populate_table()
+        self._remote_entries = entries
+        self._remote_path = path
+        self._populate_pane("remote")
 
-    def _populate_table(self) -> None:
-        table = self.query_one("#fb_table", DataTable)
-        table.clear()
-        for i, entry in enumerate(self._entries):
-            table.add_row(entry.display_name, entry.size_str, entry.modified, key=str(i))
-        self.query_one("#fb_path_bar", Static).update(
-            f"  📂 [b cyan]{self._path}[/b cyan]"
-        )
-        self._set_status(f"{len(self._entries)} item(s)  —  {self._path}")
+    # -------------------------------------------------------------------------
+    # Table population
+    # -------------------------------------------------------------------------
 
-    # --- Helpers ---
+    def _populate_pane(self, pane: str) -> None:
+        if pane == "local":
+            tbl = self.query_one("#fm_local_table", DataTable)
+            entries = self._local_entries
+            self.query_one("#fm_local_path_bar", Static).update(
+                f"  💻 [b cyan]{self._local_path}[/b cyan]"
+            )
+            label = f"Local: {self._local_path}"
+        else:
+            tbl = self.query_one("#fm_remote_table", DataTable)
+            entries = self._remote_entries
+            self.query_one("#fm_remote_path_bar", Static).update(
+                f"  🎮 [b yellow]{self._remote_path}[/b yellow]"
+            )
+            label = f"Console: {self._remote_path}"
 
-    def _set_status(self, msg: str) -> None:
-        try:
-            self.query_one("#status_bar", StatusBar).set_text(msg)
-        except Exception:
-            pass
+        tbl.clear()
+        for i, entry in enumerate(entries):
+            tbl.add_row(entry.display_name, entry.size_str, entry.modified, key=str(i))
 
-    def _selected_entry(self) -> FtpEntry | None:
-        table = self.query_one("#fb_table", DataTable)
-        idx = table.cursor_row
-        if 0 <= idx < len(self._entries):
-            return self._entries[idx]
-        return None
+        self._set_status(f"{len(entries)} item(s)  —  {label}")
 
-    def _join(self, name: str) -> str:
-        return self._path.rstrip("/") + "/" + name
+    # -------------------------------------------------------------------------
+    # Focus / pane switching
+    # -------------------------------------------------------------------------
 
-    def _parent_path(self) -> str:
-        parts = self._path.rstrip("/").rsplit("/", 1)
-        return parts[0] if parts[0] else "/"
+    def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
+        """Track which pane is active based on where the cursor moves."""
+        new_active = "local" if event.data_table.id == "fm_local_table" else "remote"
+        if new_active != self._active:
+            self._active = new_active
+            self._update_pane_styles()
 
-    # --- Event handlers ---
+    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
+        """Enter key: navigate into directories."""
+        if event.data_table.id == "fm_local_table":
+            self._active = "local"
+            entry = self._local_selected()
+            if entry and entry.is_dir:
+                new_path = self._local_path / entry.name
+                if new_path.is_dir():
+                    self._local_path = new_path
+                    self._refresh_local()
+        else:
+            self._active = "remote"
+            entry = self._remote_selected()
+            if entry and entry.is_dir:
+                asyncio.ensure_future(self._list_remote(self._join_remote(entry.name)))
+
+    # -------------------------------------------------------------------------
+    # Button handler
+    # -------------------------------------------------------------------------
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
-        mapping = {
-            "fb_up_btn": self.action_go_up,
-            "fb_newfolder_btn": self.action_new_folder,
-            "fb_rename_btn": self.action_rename,
-            "fb_delete_btn": self.action_delete,
-            "fb_refresh_btn": self.action_refresh,
+        mapping: dict[str, Any] = {
+            "fm_up_btn": self.action_go_up,
+            "fm_newfolder_btn": self.action_new_folder,
+            "fm_rename_btn": self.action_rename,
+            "fm_delete_btn": self.action_delete,
+            "fm_transfer_btn": self.action_transfer,
+            "fm_refresh_btn": self.action_refresh,
         }
         action = mapping.get(event.button.id)
         if action:
@@ -293,13 +419,9 @@ class FtpBrowserScreen(Screen):
             if asyncio.iscoroutine(result):
                 asyncio.ensure_future(result)
 
-    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
-        """Enter key: navigate into directories."""
-        entry = self._selected_entry()
-        if entry and entry.is_dir:
-            asyncio.ensure_future(self._list_path(self._join(entry.name)))
-
-    # --- Actions ---
+    # -------------------------------------------------------------------------
+    # Actions — navigation
+    # -------------------------------------------------------------------------
 
     async def action_back(self) -> None:
         if self._client:
@@ -310,24 +432,37 @@ class FtpBrowserScreen(Screen):
             self._client = None
         self.app.pop_screen()
 
-    @work(exclusive=True, exit_on_error=False)
-    async def _navigate(self, path: str) -> None:
-        """Navigate to a path as a worker (avoids passing coroutine objects to run_worker)."""
-        await self._list_path(path)
+    def action_switch_pane(self) -> None:
+        self._active = "remote" if self._active == "local" else "local"
+        self._update_pane_styles()
+        tbl_id = "fm_remote_table" if self._active == "remote" else "fm_local_table"
+        self.query_one(f"#{tbl_id}", DataTable).focus()
 
-    async def action_go_up(self) -> None:
-        if self._path == "/":
-            return
-        await self._list_path(self._parent_path())
+    def action_go_up(self) -> None:
+        if self._active == "local":
+            parent = self._local_path.parent
+            if parent != self._local_path:
+                self._local_path = parent
+                self._refresh_local()
+        else:
+            if self._remote_path != "/":
+                asyncio.ensure_future(self._list_remote(self._remote_parent()))
 
-    async def action_refresh(self) -> None:
-        await self._list_path(self._path)
+    def action_refresh(self) -> None:
+        if self._active == "local":
+            self._refresh_local()
+        else:
+            asyncio.ensure_future(self._list_remote(self._remote_path))
+
+    def action_quit(self) -> None:
+        self.app.exit()
+
+    # -------------------------------------------------------------------------
+    # Actions — file operations
+    # -------------------------------------------------------------------------
 
     def action_new_folder(self) -> None:
-        self.app.push_screen(
-            NewFolderModal(),
-            callback=lambda name: self._do_new_folder(name),
-        )
+        self.app.push_screen(NewFolderModal(), callback=self._do_new_folder)
 
     def _do_new_folder(self, name: str | None) -> None:
         if not name:
@@ -335,19 +470,27 @@ class FtpBrowserScreen(Screen):
         asyncio.ensure_future(self._new_folder_worker(name))
 
     async def _new_folder_worker(self, name: str) -> None:
-        if not self._client:
-            self._set_status("Not connected.")
-            return
-        new_path = self._join(name)
-        self._set_status(f"Creating folder {name}…")
-        try:
-            await self._client.make_directory(new_path)
-            await self._list_path(self._path)
-        except FtpTransferError as e:
-            self._set_status(f"Create folder failed: {e}")
+        if self._active == "local":
+            new_dir = self._local_path / name
+            try:
+                new_dir.mkdir(parents=False)
+                self._refresh_local()
+            except OSError as e:
+                self._set_status(f"Create folder failed: {e}")
+        else:
+            if not self._client:
+                self._set_status("Not connected.")
+                return
+            new_path = self._join_remote(name)
+            self._set_status(f"Creating folder {name}…")
+            try:
+                await self._client.make_directory(new_path)
+                await self._list_remote(self._remote_path)
+            except FtpTransferError as e:
+                self._set_status(f"Create folder failed: {e}")
 
     def action_rename(self) -> None:
-        entry = self._selected_entry()
+        entry = self._active_selected()
         if entry is None:
             self._set_status("Select an item to rename.")
             return
@@ -356,24 +499,36 @@ class FtpBrowserScreen(Screen):
             callback=lambda new_name: self._do_rename(entry, new_name),
         )
 
-    def _do_rename(self, entry: FtpEntry, new_name: str | None) -> None:
+    def _do_rename(self, entry: FileEntry, new_name: str | None) -> None:
         if not new_name or new_name == entry.name:
             return
         asyncio.ensure_future(self._rename_worker(entry, new_name))
 
-    async def _rename_worker(self, entry: FtpEntry, new_name: str) -> None:
-        if not self._client:
-            self._set_status("Not connected.")
-            return
-        self._set_status(f"Renaming {entry.name} → {new_name}…")
-        try:
-            await self._client.rename(self._join(entry.name), self._join(new_name))
-            await self._list_path(self._path)
-        except FtpTransferError as e:
-            self._set_status(f"Rename failed: {e}")
+    async def _rename_worker(self, entry: FileEntry, new_name: str) -> None:
+        if self._active == "local":
+            old = self._local_path / entry.name
+            new = self._local_path / new_name
+            try:
+                old.rename(new)
+                self._refresh_local()
+            except OSError as e:
+                self._set_status(f"Rename failed: {e}")
+        else:
+            if not self._client:
+                self._set_status("Not connected.")
+                return
+            self._set_status(f"Renaming {entry.name} → {new_name}…")
+            try:
+                await self._client.rename(
+                    self._join_remote(entry.name),
+                    self._join_remote(new_name),
+                )
+                await self._list_remote(self._remote_path)
+            except FtpTransferError as e:
+                self._set_status(f"Rename failed: {e}")
 
     def action_delete(self) -> None:
-        entry = self._selected_entry()
+        entry = self._active_selected()
         if entry is None:
             self._set_status("Select an item to delete.")
             return
@@ -382,24 +537,85 @@ class FtpBrowserScreen(Screen):
             callback=lambda confirmed: self._do_delete(entry, confirmed),
         )
 
-    def _do_delete(self, entry: FtpEntry, confirmed: bool) -> None:
+    def _do_delete(self, entry: FileEntry, confirmed: bool) -> None:
         if not confirmed:
             return
         asyncio.ensure_future(self._delete_worker(entry))
 
-    async def _delete_worker(self, entry: FtpEntry) -> None:
-        if not self._client:
-            self._set_status("Not connected.")
-            return
-        self._set_status(f"Deleting {entry.name}…")
-        try:
-            if entry.is_dir:
-                await self._client.remove_directory(self._join(entry.name))
-            else:
-                await self._client.delete_file(self._join(entry.name))
-            await self._list_path(self._path)
-        except FtpTransferError as e:
-            self._set_status(f"Delete failed: {e}")
+    async def _delete_worker(self, entry: FileEntry) -> None:
+        if self._active == "local":
+            target = self._local_path / entry.name
+            try:
+                if entry.is_dir:
+                    target.rmdir()
+                else:
+                    target.unlink()
+                self._refresh_local()
+            except OSError as e:
+                self._set_status(f"Delete failed: {e}")
+        else:
+            if not self._client:
+                self._set_status("Not connected.")
+                return
+            self._set_status(f"Deleting {entry.name}…")
+            try:
+                if entry.is_dir:
+                    await self._client.remove_directory(self._join_remote(entry.name))
+                else:
+                    await self._client.delete_file(self._join_remote(entry.name))
+                await self._list_remote(self._remote_path)
+            except FtpTransferError as e:
+                self._set_status(f"Delete failed: {e}")
 
-    def action_quit(self) -> None:
-        self.app.exit()
+    # -------------------------------------------------------------------------
+    # Transfer action (copy between panes)
+    # -------------------------------------------------------------------------
+
+    def action_transfer(self) -> None:
+        entry = self._active_selected()
+        if entry is None:
+            self._set_status("Select a file to transfer.")
+            return
+        if entry.is_dir:
+            self._set_status(
+                "Directory transfer not supported — select individual files to transfer."
+            )
+            return
+        if not self._client:
+            self._set_status("Not connected to console — cannot transfer.")
+            return
+        asyncio.ensure_future(self._transfer_worker(entry))
+
+    async def _transfer_worker(self, entry: FileEntry) -> None:
+        if self._active == "local":
+            # Upload: local → remote
+            local_src = self._local_path / entry.name
+            remote_dest = self._join_remote(entry.name)
+            modal = ProgressModal(title=f"Uploading: {entry.name}")
+            await self.app.push_screen(modal)
+            try:
+                def _up_cb(sent: int, total: int) -> None:
+                    modal.set_stage(f"Uploading {entry.name}…", sent, total or entry.size)
+
+                await self._client.upload_file(local_src, remote_dest, progress_callback=_up_cb)  # type: ignore[arg-type]
+                modal.set_done(f"Uploaded to {remote_dest}", success=True)
+                await self._list_remote(self._remote_path)
+            except (FtpTransferError, FtpConnectionError) as e:
+                modal.set_done(f"Upload failed: {e}", success=False)
+        else:
+            # Download: remote → local
+            remote_src = self._join_remote(entry.name)
+            local_dest = self._local_path / entry.name
+            modal = ProgressModal(title=f"Downloading: {entry.name}")
+            await self.app.push_screen(modal)
+            try:
+                def _dl_cb(received: int, total: int) -> None:
+                    modal.set_stage(f"Downloading {entry.name}…", received, total or entry.size)
+
+                await self._client.download_file(
+                    remote_src, local_dest, total_size=entry.size, progress_callback=_dl_cb
+                )
+                modal.set_done(f"Saved to {local_dest}", success=True)
+                self._refresh_local()
+            except (FtpTransferError, FtpConnectionError) as e:
+                modal.set_done(f"Download failed: {e}", success=False)

@@ -277,22 +277,57 @@ SplashScreen > Vertical {
     margin-top: 1;
 }
 
-/* FTP File Browser */
+/* File Manager — dual-pane layout */
 
-#fb_path_bar {
+#fm_panels {
+    height: 1fr;
+}
+
+#fm_local_panel,
+#fm_remote_panel {
+    width: 1fr;
+    height: 1fr;
+    border: solid #333333;
+    padding: 0;
+}
+
+#fm_local_panel.panel-active {
+    border: solid #00d4ff;
+}
+
+#fm_remote_panel.panel-active {
+    border: solid #ffd700;
+}
+
+.panel-path-bar {
     height: 1;
     background: #0d1a2e;
-    color: #00d4ff;
+    color: #aaaaaa;
     padding: 0 1;
 }
 
-#fb_toolbar {
+#fm_local_panel.panel-active .panel-path-bar {
+    color: #00d4ff;
+    background: #0a1520;
+}
+
+#fm_remote_panel.panel-active .panel-path-bar {
+    color: #ffd700;
+    background: #1a1200;
+}
+
+#fm_local_table,
+#fm_remote_table {
+    height: 1fr;
+}
+
+#fm_toolbar {
     height: auto;
-    padding: 1;
+    padding: 0 1;
     background: #111111;
 }
 
-#fb_toolbar Button {
+#fm_toolbar Button {
     width: auto;
     margin-right: 1;
 }
