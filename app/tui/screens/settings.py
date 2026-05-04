@@ -57,107 +57,8 @@ class SettingsScreen(Screen):
     def compose(self) -> ComposeResult:
         yield Header(show_clock=False)
         with VerticalScroll():
-            yield Static("[b cyan]Connection Profiles[/]")
-            yield ListView(id="profiles_list")
-            with Horizontal():
-                yield Button("Add", id="add_profile", variant="primary")
-                yield Button("Edit", id="edit_profile")
-                yield Button("Delete", id="del_profile", variant="error")
-                yield Button("Set Default", id="default_profile")
-            yield Static("\n[b cyan]FTP Connection[/]")
-            yield Static("", id="ftp_status", classes="muted")
-            with Horizontal():
-                yield Button("Test Connection", id="ftp_test", variant="primary")
-                yield Button("Reconnect", id="ftp_reconnect", variant="success")
-                yield Button("Disconnect", id="ftp_disconnect")
-            yield Static("\n[b cyan]Download Directory[/]")
-            yield Input(value=self.app.settings.download_dir, id="dl_dir")
-            yield Static("\n[b cyan]Cache[/]")
-            yield Static("", id="cache_info")
-            with Horizontal():
-                yield Button("Refresh DB", id="refresh_db", variant="primary")
-                yield Button("Clear Cache", id="clear_cache", variant="error")
-            yield Static("\n[b cyan]USB[/]")
-            yield Input(
-                value=self.app.settings.usb.manual_path or "",
-                placeholder="Manual USB mount (leave empty for auto-detect)",
-                id="usb_path",
-            )
-            yield Static("\n[b cyan]Aurora Folder Path[/]")
-            yield Static("[dim]Used to resolve {AURORAPATH} in trainer install paths[/]")
-            yield Input(
-                value=self.app.settings.aurora_path,
-                placeholder="e.g. Hdd:\\Aurora\\",
-                id="aurora_path",
-            )
-            yield Static("\n[b cyan]Game Library Paths[/]")
-            yield Static(
-                "[dim]Xbox game folder paths to scan for Title ID subfolders.\n"
-                "Separate multiple paths with a semicolon.\n"
-                "e.g. Usb1\\Games;Usb0\\Games[/]"
-            )
-            yield Input(
-                value=";".join(self.app.settings.game_paths),
-                placeholder="e.g. Usb1\\Games",
-                id="game_paths",
-            )
-            yield Static("\n[b cyan]Library Scan Depth[/]")
-            yield Static("[dim]Max folder levels to traverse when scanning for Title IDs.\nSet to 4 if you use a friendly parent folder (Games/Minecraft/4D530A81).[/]")
-            yield Input(
-                value=str(self.app.settings.game_scan_depth),
-                placeholder="4",
-                id="game_scan_depth",
-            )
-            yield Static("\n[b cyan]Local ISO Path[/]")
-            yield Static("[dim]Local PC folder containing Xbox 360 ISO files.\nSupports flat (GameName.iso) and subfoldered ({GameName}/{GameName}.iso) layouts.[/]")
-            yield Input(
-                value=self.app.settings.local_iso_path,
-                placeholder="e.g. D:\\Xbox360\\ISOs",
-                id="local_iso_path",
-            )
-            yield Static("\n[b cyan]Local GOD Path[/]")
-            yield Static("[dim]Local PC folder containing GOD (Games on Demand) format games.\nExpected structure: {GameName}/{TitleID}/{ContentType}/{ContainerFile}[/]")
-            yield Input(
-                value=self.app.settings.local_god_path,
-                placeholder="e.g. D:\\Xbox360\\GODs",
-                id="local_god_path",
-            )
-            yield Static("\n[b cyan]Game Install Destination[/]")
-            yield Static("[dim]Xbox path where GOD games will be transferred to.\ne.g. Hdd:\\Content\\0000000000000000\\ or Usb0\\Games[/]")
-            yield Input(
-                value=self.app.settings.game_install_path,
-                placeholder="e.g. Hdd:\\Content\\0000000000000000\\",
-                id="game_install_path",
-            )
-            yield Static("\n[b cyan]Torrent Download Folder[/]")
-            yield Static(
-                "[dim]Local PC folder where qBittorrent will save downloaded torrents.\n"
-                "Used for legally-owned Xbox 360 game backup torrents only.[/]"
-            )
-            yield Input(
-                value=self.app.settings.torrent_download_folder,
-                placeholder="e.g. D:\\Xbox360\\Torrents",
-                id="torrent_download_folder",
-            )
-            yield Static("\n[b cyan]qBittorrent Connection[/]")
-            yield Static("[dim]Host, port, and credentials for the qBittorrent Web UI.[/]")
-            yield Input(value=self.app.settings.qbit_host, placeholder="localhost", id="qbit_host")
-            yield Input(value=str(self.app.settings.qbit_port), placeholder="8080", id="qbit_port")
-            yield Input(value=self.app.settings.qbit_username, placeholder="admin", id="qbit_username")
-            yield Input(
-                value=self.app.settings.qbit_password,
-                placeholder="adminadmin",
-                id="qbit_password",
-                password=True,
-            )
-            yield Static("\n[b cyan]USB Backup Directory[/]")
-            yield Static("[dim]Local folder to store USB backup images.\nLeave empty to use default (USBBackups/ in app folder).[/]")
-            yield Input(
-                value=self.app.settings.backup_dir,
-                placeholder="Leave empty for default",
-                id="backup_dir",
-            )
-            yield Static("\n[b cyan]Updates[/]")
+            # ── Updates ──────────────────────────────────────────────────────
+            yield Static("[b cyan]Updates[/]")
             yield Static(f"[dim]Current version: [bold]{app_mod.__version__}[/bold][/]")
             yield Static("[dim]Check GitHub Releases for newer versions of x360tm.[/]")
             with Horizontal():
@@ -172,6 +73,134 @@ class SettingsScreen(Screen):
             with Horizontal():
                 yield Button("Check for Updates", id="check_updates", variant="primary")
                 yield Static("", id="update_status")
+
+            # ── Connection Profiles ───────────────────────────────────────────
+            yield Static("\n[b cyan]Connection Profiles[/]")
+            yield ListView(id="profiles_list")
+            with Horizontal():
+                yield Button("Add", id="add_profile", variant="primary")
+                yield Button("Edit", id="edit_profile")
+                yield Button("Delete", id="del_profile", variant="error")
+                yield Button("Set Default", id="default_profile")
+
+            # ── FTP Connection ────────────────────────────────────────────────
+            yield Static("\n[b cyan]FTP Connection[/]")
+            yield Static("", id="ftp_status", classes="muted")
+            with Horizontal():
+                yield Button("Test Connection", id="ftp_test", variant="primary")
+                yield Button("Reconnect", id="ftp_reconnect", variant="success")
+                yield Button("Disconnect", id="ftp_disconnect")
+
+            # ── Cache ─────────────────────────────────────────────────────────
+            yield Static("\n[b cyan]Cache[/]")
+            yield Static("", id="cache_info")
+            with Horizontal():
+                yield Button("Refresh DB", id="refresh_db", variant="primary")
+                yield Button("Clear Cache", id="clear_cache", variant="error")
+
+            # ── qBittorrent ───────────────────────────────────────────────────
+            yield Static("\n[b cyan]qBittorrent Connection[/]")
+            yield Static("[dim]Host, port, and credentials for the qBittorrent Web UI.[/]")
+            yield Input(value=self.app.settings.qbit_host, placeholder="localhost", id="qbit_host")
+            yield Input(value=str(self.app.settings.qbit_port), placeholder="8080", id="qbit_port")
+            yield Input(value=self.app.settings.qbit_username, placeholder="admin", id="qbit_username")
+            yield Input(
+                value=self.app.settings.qbit_password,
+                placeholder="adminadmin",
+                id="qbit_password",
+                password=True,
+            )
+
+            # ── USB Mount (Manual) ────────────────────────────────────────────
+            yield Static("\n[b cyan]USB Mount (Manual)[/]")
+            yield Input(
+                value=self.app.settings.usb.manual_path or "",
+                placeholder="Manual USB mount path (leave empty for auto-detect)",
+                id="usb_path",
+            )
+
+            # ── Local Paths ───────────────────────────────────────────────────
+            yield Static("\n[b cyan]Local Paths[/]")
+
+            yield Static("\n[b]Local Downloads[/]")
+            yield Static("[dim]Destination for downloaded mods, homebrew, saves and other content.[/]")
+            yield Input(value=self.app.settings.download_dir, id="dl_dir")
+
+            yield Static("\n[b]Local ISO Path[/]")
+            yield Static("[dim]Local folder containing Xbox 360 ISO files.\nSupports flat (GameName.iso) and subfoldered ({GameName}/{GameName}.iso) layouts.[/]")
+            yield Input(
+                value=self.app.settings.local_iso_path,
+                placeholder="e.g. /home/user/Xbox360/ISOs",
+                id="local_iso_path",
+            )
+
+            yield Static("\n[b]Local GOD Path[/]")
+            yield Static("[dim]Local folder containing GOD (Games on Demand) format games.\nExpected structure: {GameName}/{TitleID}/{ContentType}/{ContainerFile}[/]")
+            yield Input(
+                value=self.app.settings.local_god_path,
+                placeholder="e.g. /home/user/Xbox360/GODs",
+                id="local_god_path",
+            )
+
+            yield Static("\n[b]Torrent Download Folder[/]")
+            yield Static(
+                "[dim]Local folder where qBittorrent will save downloaded torrents.\n"
+                "Used for legally-owned Xbox 360 game backup torrents only.[/]"
+            )
+            yield Input(
+                value=self.app.settings.torrent_download_folder,
+                placeholder="e.g. /home/user/Xbox360/Torrents",
+                id="torrent_download_folder",
+            )
+
+            yield Static("\n[b]USB Backup Directory[/]")
+            yield Static("[dim]Local folder to store USB backup images.\nLeave empty to use default (USBBackups/ in app folder).[/]")
+            yield Input(
+                value=self.app.settings.backup_dir,
+                placeholder="Leave empty for default",
+                id="backup_dir",
+            )
+
+            # ── Console Paths ─────────────────────────────────────────────────
+            yield Static("\n[b cyan]Console Paths[/]")
+
+            yield Static("\n[b]Aurora Folder Path[/]")
+            yield Static("[dim]Used to resolve {AURORAPATH} in trainer install paths.[/]")
+            yield Input(
+                value=self.app.settings.aurora_path,
+                placeholder="e.g. Hdd:\\Aurora\\",
+                id="aurora_path",
+            )
+
+            yield Static("\n[b]Game Library Paths[/]")
+            yield Static(
+                "[dim]Xbox game folder paths to scan for Title ID subfolders.\n"
+                "Separate multiple paths with a semicolon.\n"
+                "e.g. Usb1:\\Games;Usb0:\\Games[/]"
+            )
+            yield Input(
+                value=";".join(self.app.settings.game_paths),
+                placeholder="e.g. Usb1:\\Games",
+                id="game_paths",
+            )
+
+            yield Static("\n[b]Library Scan Depth[/]")
+            yield Static("[dim]Max folder levels to traverse when scanning for Title IDs.\nSet to 4 if games sit inside a friendly parent folder (Games/Minecraft/4D530A81).[/]")
+            yield Input(
+                value=str(self.app.settings.game_scan_depth),
+                placeholder="4",
+                id="game_scan_depth",
+            )
+
+            yield Static("\n[b]Game Install Destination[/]")
+            yield Static("[dim]Xbox path where GOD games will be transferred to.\ne.g. Hdd:\\Content\\0000000000000000\\ or Usb0:\\Games[/]")
+            yield Input(
+                value=self.app.settings.game_install_path,
+                placeholder="e.g. Hdd:\\Content\\0000000000000000\\",
+                id="game_install_path",
+            )
+
+            # ── Save / Back ───────────────────────────────────────────────────
             with Horizontal():
                 yield Button("Save", id="save_settings", variant="success")
                 yield Button("Back", id="back")
