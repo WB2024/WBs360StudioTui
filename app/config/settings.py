@@ -73,6 +73,18 @@ class Settings:
     auto_update: bool = True
     update_channel: str = "latest"  # 'latest' | 'pre-release'
     backup_dir: str = ""
+    # Local content source root (all Local*/ folders resolve relative to this)
+    local_content_root: str = ""
+    # Torrent watch folder (overrides bundled Torrent/ in repo root)
+    torrent_folder: str = ""
+    # Console install path overrides for local content (empty = use DB defaults)
+    mod_install_path: str = ""
+    trainer_install_path: str = ""
+    homebrew_install_path: str = ""
+    game_save_install_path: str = ""
+    cheat_install_path: str = ""
+    patch_install_path: str = ""
+    title_update_install_path: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -97,6 +109,15 @@ class Settings:
             "auto_update": self.auto_update,
             "update_channel": self.update_channel,
             "backup_dir": self.backup_dir,
+            "local_content_root": self.local_content_root,
+            "torrent_folder": self.torrent_folder,
+            "mod_install_path": self.mod_install_path,
+            "trainer_install_path": self.trainer_install_path,
+            "homebrew_install_path": self.homebrew_install_path,
+            "game_save_install_path": self.game_save_install_path,
+            "cheat_install_path": self.cheat_install_path,
+            "patch_install_path": self.patch_install_path,
+            "title_update_install_path": self.title_update_install_path,
         }
 
     @classmethod
@@ -127,6 +148,15 @@ class Settings:
             auto_update=bool(d.get("auto_update", True)),
             update_channel=d.get("update_channel", "latest"),
             backup_dir=d.get("backup_dir", ""),
+            local_content_root=d.get("local_content_root", ""),
+            torrent_folder=d.get("torrent_folder", ""),
+            mod_install_path=d.get("mod_install_path", ""),
+            trainer_install_path=d.get("trainer_install_path", ""),
+            homebrew_install_path=d.get("homebrew_install_path", ""),
+            game_save_install_path=d.get("game_save_install_path", ""),
+            cheat_install_path=d.get("cheat_install_path", ""),
+            patch_install_path=d.get("patch_install_path", ""),
+            title_update_install_path=d.get("title_update_install_path", ""),
         )
 
     # --- Profile mgmt ---

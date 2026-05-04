@@ -122,6 +122,14 @@ class SettingsScreen(Screen):
             # ── Local Paths ───────────────────────────────────────────────────
             yield Static("\n[b cyan]Local Paths[/]")
 
+            yield Static("\n[b]Local Content Root[/]")
+            yield Static("[dim]Root folder for all Local*/ content directories (Mods, Trainers, Saves, etc.).\nLeave empty to use the app install directory (current default).[/]")
+            yield Input(
+                value=self.app.settings.local_content_root,
+                placeholder="Leave empty for default (app directory)",
+                id="local_content_root",
+            )
+
             yield Static("\n[b]Local Downloads[/]")
             yield Static("[dim]Destination for downloaded mods, homebrew, saves and other content.[/]")
             yield Input(value=self.app.settings.download_dir, id="dl_dir")
@@ -142,7 +150,7 @@ class SettingsScreen(Screen):
                 id="local_god_path",
             )
 
-            yield Static("\n[b]Torrent Download Folder[/]")
+            yield Static("\n[b]Torrent Watch Folder[/]")
             yield Static(
                 "[dim]Local folder where qBittorrent will save downloaded torrents.\n"
                 "Used for legally-owned Xbox 360 game backup torrents only.[/]"
@@ -151,6 +159,14 @@ class SettingsScreen(Screen):
                 value=self.app.settings.torrent_download_folder,
                 placeholder="e.g. /home/user/Xbox360/Torrents",
                 id="torrent_download_folder",
+            )
+
+            yield Static("\n[b]Torrent Picker Folder[/]")
+            yield Static("[dim].torrent files to browse in the Torrent Picker screen.\nLeave empty to use the bundled Torrent/ folder in the app directory.[/]")
+            yield Input(
+                value=self.app.settings.torrent_folder,
+                placeholder="Leave empty for default (Torrent/ in app directory)",
+                id="torrent_folder",
             )
 
             yield Static("\n[b]USB Backup Directory[/]")
@@ -198,6 +214,50 @@ class SettingsScreen(Screen):
                 value=self.app.settings.game_install_path,
                 placeholder="e.g. Hdd:\\Content\\0000000000000000\\",
                 id="game_install_path",
+            )
+
+            # ── Console Install Paths ─────────────────────────────────────────
+            yield Static("\n[b cyan]Console Install Paths[/]")
+            yield Static("[dim]Override where each content type is installed on the console.\nLeave empty to use the standard paths from the Arisen Studio database.[/]")
+
+            yield Static("\n[b]Mods Install Path[/]")
+            yield Static("[dim]Xbox path for mod installs. e.g. Hdd:\\JTAG\\[/]")
+            yield Input(
+                value=self.app.settings.mod_install_path,
+                placeholder="e.g. Hdd:\\JTAG\\ (leave empty for DB default)",
+                id="mod_install_path",
+            )
+
+            yield Static("\n[b]Trainers Install Path[/]")
+            yield Static("[dim]Xbox base path for trainer installs. {AURORAPATH} is appended when empty.\ne.g. Hdd:\\Aurora\\User\\Trainers\\[/]")
+            yield Input(
+                value=self.app.settings.trainer_install_path,
+                placeholder="Leave empty to use {AURORAPATH}\\User\\Trainers\\",
+                id="trainer_install_path",
+            )
+
+            yield Static("\n[b]Homebrew Install Path[/]")
+            yield Static("[dim]Xbox base path for homebrew app installs.\ne.g. Hdd:\\Content\\0000000000000000\\[/]")
+            yield Input(
+                value=self.app.settings.homebrew_install_path,
+                placeholder="Leave empty for DB default",
+                id="homebrew_install_path",
+            )
+
+            yield Static("\n[b]Game Saves Install Path[/]")
+            yield Static("[dim]Xbox base path for game save installs.\ne.g. Hdd:\\Content\\0000000000000000\\[/]")
+            yield Input(
+                value=self.app.settings.game_save_install_path,
+                placeholder="Leave empty for DB default",
+                id="game_save_install_path",
+            )
+
+            yield Static("\n[b]Title Update Install Path[/]")
+            yield Static("[dim]Xbox base path for Title Update installs (FTP). Drive letter is auto-derived from Game Install Destination.\ne.g. Usb1:\\Content\\0000000000000000\\[/]")
+            yield Input(
+                value=self.app.settings.title_update_install_path,
+                placeholder="Leave empty for standard path",
+                id="title_update_install_path",
             )
 
             # ── Save / Back ───────────────────────────────────────────────────
@@ -313,6 +373,13 @@ class SettingsScreen(Screen):
             app.settings.qbit_username = self.query_one("#qbit_username", Input).value.strip() or "admin"
             app.settings.qbit_password = self.query_one("#qbit_password", Input).value or "adminadmin"
             app.settings.backup_dir = self.query_one("#backup_dir", Input).value.strip()
+            app.settings.local_content_root = self.query_one("#local_content_root", Input).value.strip()
+            app.settings.torrent_folder = self.query_one("#torrent_folder", Input).value.strip()
+            app.settings.mod_install_path = self.query_one("#mod_install_path", Input).value.strip()
+            app.settings.trainer_install_path = self.query_one("#trainer_install_path", Input).value.strip()
+            app.settings.homebrew_install_path = self.query_one("#homebrew_install_path", Input).value.strip()
+            app.settings.game_save_install_path = self.query_one("#game_save_install_path", Input).value.strip()
+            app.settings.title_update_install_path = self.query_one("#title_update_install_path", Input).value.strip()
             app.settings.auto_update = self.query_one("#auto_update", Switch).value
             sel = self.query_one("#update_channel", Select)
             if sel.value and sel.value is not Select.BLANK:
@@ -362,7 +429,7 @@ class SettingsScreen(Screen):
     async def _refresh_db_worker(self) -> None:
         try:
             await self.app.db.fetch_all()
-            await asyncio.to_thread(self.app.db.load_all)
+            await asyncio.to_thread(self.app.db.load_all, self.app.settings)
             self.app.settings.mark_db_fetched()
             save_settings(self.app.settings)
             self._refresh_cache_info()

@@ -63,7 +63,7 @@ class SplashScreen(Screen):
             return
 
         self._log("Loading databases...")
-        await asyncio.to_thread(db.load_all)
+        await asyncio.to_thread(db.load_all, app.settings)
 
         if not online:
             self._log(f"[yellow]Offline — using cached data[/yellow]")

@@ -39,6 +39,12 @@ class TorrentPickerScreen(Screen):
         self._decoded: dict[str, DecodedTorrent] = {}
         self._current: DecodedTorrent | None = None
 
+    def _torrent_dir(self) -> Path:
+        """Return the configured torrent folder, falling back to the bundled Torrent/ dir."""
+        settings = getattr(self.app, "settings", None)
+        configured = getattr(settings, "torrent_folder", "") if settings else ""
+        return Path(configured) if configured else _TORRENT_DIR
+
     # ── layout ──
     def compose(self) -> ComposeResult:
         yield Header(show_clock=False)
@@ -63,7 +69,9 @@ class TorrentPickerScreen(Screen):
         table = self.query_one("#tor_table", DataTable)
         table.add_columns("File", "Name", "Files", "Size")
 
-        _TORRENT_DIR.mkdir(parents=True, exist_ok=True)
+        _dir = self._torrent_dir()
+        _dir.mkdir(parents=True, exist_ok=True)
+        self.query_one("#tor_folder", Static).update(f"Folder: {_dir}")
         self._refresh_table()
 
     # ── helpers ──
@@ -74,14 +82,15 @@ class TorrentPickerScreen(Screen):
             pass
 
     def _refresh_table(self) -> None:
-        self._files = list_torrent_files(_TORRENT_DIR)
+        _dir = self._torrent_dir()
+        self._files = list_torrent_files(_dir)
         self._decoded = {}
         table = self.query_one("#tor_table", DataTable)
         table.clear()
 
         if not self._files:
             self._set_status(
-                f"No .torrent files found in {_TORRENT_DIR}. "
+                f"No .torrent files found in {_dir}. "
                 "Drop .torrent files into that folder and press R."
             )
             self.query_one("#tor_detail_text", Static).update(

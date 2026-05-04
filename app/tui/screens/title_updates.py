@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import time
+from pathlib import Path
 from typing import Any
 
 from textual.app import ComposeResult
@@ -230,7 +231,12 @@ class TitleUpdatesScreen(Screen):
     # --- Data ---
 
     def _load_updates(self) -> None:
-        self._updates = scan_local_title_updates()
+        settings = self.app.settings  # type: ignore[attr-defined]
+        content_root = getattr(settings, "local_content_root", "") or None
+        tu_path = None
+        if content_root:
+            tu_path = Path(content_root) / "LocalTitleUpdates"
+        self._updates = scan_local_title_updates(path=tu_path)
 
     def _in_library(self, title_id: str) -> bool:
         library: dict[str, str] = getattr(self.app, "library", {})

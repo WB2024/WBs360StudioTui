@@ -29,22 +29,29 @@ log = logging.getLogger(__name__)
 _REPO_ROOT = Path(__file__).parent.parent.parent
 
 
-def _local_dir(name: str) -> Path:
-    return _REPO_ROOT / name
+def _local_dir(name: str, content_root: Path | None = None) -> Path:
+    return (content_root or _REPO_ROOT) / name
 
 
 # ---------------------------------------------------------------------------
 # Trainers
 # ---------------------------------------------------------------------------
 
-def _trainer_install_path(title_id: str, stem: str, filename: str) -> str:
-    """Standard Aurora trainer install path for a local trainer file."""
+def _trainer_install_path(title_id: str, stem: str, filename: str, override: str = "") -> str:
+    """Console trainer install path for a local trainer file."""
+    if override:
+        base = override.rstrip("\\/")
+        return f"{base}\\{title_id}\\{stem}\\{filename}"
     return f"{{AURORAPATH}}\\User\\Trainers\\{title_id}\\{stem}\\{filename}"
 
 
-def load_local_trainers() -> list[TrainerGameItem]:
+def load_local_trainers(
+    content_root: str | Path | None = None,
+    install_path_override: str = "",
+) -> list[TrainerGameItem]:
     """Scan LocalTrainers/ and build TrainerGameItem objects."""
-    base = _local_dir("LocalTrainers")
+    root = Path(content_root) if content_root else None
+    base = _local_dir("LocalTrainers", root)
     if not base.is_dir():
         return []
 
@@ -58,7 +65,7 @@ def load_local_trainers() -> list[TrainerGameItem]:
             if not f.is_file() or f.name == ".gitkeep":
                 continue
             stem = f.stem  # e.g. "Trainer(RETROBYTE)"
-            install_path = _trainer_install_path(title_id, stem, f.name)
+            install_path = _trainer_install_path(title_id, stem, f.name, install_path_override)
             trainers.append(TrainerItem(
                 name=stem,
                 type="aurora",  # RETROBYTE trainers run under Aurora
@@ -96,23 +103,35 @@ def _read_json_meta(directory: Path, default_name: str) -> dict:
     return {}
 
 
-def _mod_files_from_dir(directory: Path, title_id: str) -> list[DownloadFile]:
+def _mod_files_from_dir(
+    directory: Path,
+    title_id: str,
+    install_path_override: str = "",
+) -> list[DownloadFile]:
     """Collect non-metadata files in a directory as DownloadFile objects."""
     skip = {"mod.json", "meta.json", "info.json", ".gitkeep"}
+    if install_path_override:
+        base_path = install_path_override.rstrip("\\/") + f"\\{title_id}\\"
+    else:
+        base_path = f"Hdd:\\JTAG\\{title_id}\\"
     files = []
     for f in sorted(directory.iterdir()):
         if f.is_file() and f.name.lower() not in skip:
             files.append(DownloadFile(
                 name=f.name,
-                install_paths=[f"Hdd:\\JTAG\\{title_id}\\"],
+                install_paths=[base_path],
                 local_path=str(f.resolve()),
             ))
     return files
 
 
-def load_local_mods() -> list[ModItemData]:
+def load_local_mods(
+    content_root: str | Path | None = None,
+    install_path_override: str = "",
+) -> list[ModItemData]:
     """Scan LocalMods/ and build ModItemData objects."""
-    base = _local_dir("LocalMods")
+    root = Path(content_root) if content_root else None
+    base = _local_dir("LocalMods", root)
     if not base.is_dir():
         return []
 
@@ -122,7 +141,7 @@ def load_local_mods() -> list[ModItemData]:
             continue
         title_id = tid_dir.name.upper()
         meta = _read_json_meta(tid_dir, title_id)
-        dl_files = _mod_files_from_dir(tid_dir, title_id)
+        dl_files = _mod_files_from_dir(tid_dir, title_id, install_path_override)
         if not dl_files:
             continue
         results.append(ModItemData(
@@ -144,9 +163,13 @@ def load_local_mods() -> list[ModItemData]:
 # Homebrew
 # ---------------------------------------------------------------------------
 
-def load_local_homebrew() -> list[ModItemData]:
+def load_local_homebrew(
+    content_root: str | Path | None = None,
+    install_path_override: str = "",
+) -> list[ModItemData]:
     """Scan LocalHomebrew/ and build ModItemData objects."""
-    base = _local_dir("LocalHomebrew")
+    root = Path(content_root) if content_root else None
+    base = _local_dir("LocalHomebrew", root)
     if not base.is_dir():
         return []
 
@@ -155,7 +178,7 @@ def load_local_homebrew() -> list[ModItemData]:
         if not app_dir.is_dir():
             continue
         meta = _read_json_meta(app_dir, app_dir.name)
-        dl_files = _mod_files_from_dir(app_dir, app_dir.name)
+        dl_files = _mod_files_from_dir(app_dir, app_dir.name, install_path_override)
         if not dl_files:
             continue
         results.append(ModItemData(
@@ -177,9 +200,13 @@ def load_local_homebrew() -> list[ModItemData]:
 # Game Saves
 # ---------------------------------------------------------------------------
 
-def load_local_game_saves() -> list[GameSaveItemData]:
+def load_local_game_saves(
+    content_root: str | Path | None = None,
+    install_path_override: str = "",
+) -> list[GameSaveItemData]:
     """Scan LocalGameSaves/ and build GameSaveItemData objects."""
-    base = _local_dir("LocalGameSaves")
+    root = Path(content_root) if content_root else None
+    base = _local_dir("LocalGameSaves", root)
     if not base.is_dir():
         return []
 
@@ -193,9 +220,13 @@ def load_local_game_saves() -> list[GameSaveItemData]:
         dl_files = []
         for f in sorted(tid_dir.iterdir()):
             if f.is_file() and f.name.lower() not in skip:
+                if install_path_override:
+                    save_path = install_path_override.rstrip("\\/") + f"\\{title_id}\\000B0000\\"
+                else:
+                    save_path = f"Hdd:\\Content\\0000000000000000\\{title_id}\\000B0000\\"
                 dl_files.append(DownloadFile(
                     name=f.name,
-                    install_paths=[f"Hdd:\\Content\\0000000000000000\\{title_id}\\000B0000\\"],
+                    install_paths=[save_path],
                     local_path=str(f.resolve()),
                 ))
         if not dl_files:
