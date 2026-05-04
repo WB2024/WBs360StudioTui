@@ -48,6 +48,42 @@ class UpdateInfo:
     is_prerelease: bool
 
 
+async def fetch_latest_release(channel: str = "latest") -> UpdateInfo | None:
+    """Return the latest release asset info regardless of current version (for install/reinstall)."""
+    try:
+        asset = _asset_name()
+    except NotImplementedError:
+        return None
+
+    include_pre = channel == "pre-release"
+
+    async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
+        resp = await client.get(
+            f"{_API_BASE}?per_page=10",
+            headers={"Accept": "application/vnd.github+json"},
+        )
+        resp.raise_for_status()
+        releases = resp.json()
+
+    for rel in releases:
+        if rel.get("draft"):
+            continue
+        if rel.get("prerelease") and not include_pre:
+            continue
+        for a in rel.get("assets", []):
+            if a["name"] == asset:
+                tag = rel.get("tag_name", "")
+                return UpdateInfo(
+                    tag=tag,
+                    version_tuple=_parse_version(tag),
+                    download_url=a["browser_download_url"],
+                    asset_name=a["name"],
+                    body=rel.get("body", ""),
+                    is_prerelease=rel.get("prerelease", False),
+                )
+    return None
+
+
 async def check_for_update(channel: str, current_version: str) -> UpdateInfo | None:
     """
     Return UpdateInfo if a newer release exists on GitHub, else None.
@@ -204,3 +240,110 @@ def _apply_windows(archive: Path) -> None:
 def restart_app() -> None:
     """Re-exec the current process (call on Linux after apply_update returns True)."""
     os.execv(sys.executable, [sys.executable] + sys.argv[1:])
+
+
+def install_release(archive: Path) -> None:
+    """
+    Install (or reinstall) a downloaded release archive to the user's system.
+    No sudo required — installs to ~/.local/bin (Linux) or runs install.ps1 (Windows).
+    """
+    if _SYSTEM == "Linux":
+        _install_linux(archive)
+    elif _SYSTEM == "Windows":
+        _install_windows(archive)
+    else:
+        raise NotImplementedError(f"Install not supported on {_SYSTEM}")
+
+
+def _install_linux(archive: Path) -> None:
+    """Extract binary, install to ~/.local/bin, create/update .desktop entry."""
+    import subprocess
+
+    install_dir = Path.home() / ".local" / "bin"
+    icon_dir = Path.home() / ".local" / "share" / "icons" / "hicolor" / "256x256" / "apps"
+    desktop_dir = Path.home() / ".local" / "share" / "applications"
+
+    for d in (install_dir, icon_dir, desktop_dir):
+        d.mkdir(parents=True, exist_ok=True)
+
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_path = Path(tmp)
+        with tarfile.open(archive, "r:gz") as tf:
+            tf.extractall(tmp_path)
+
+        new_bin = tmp_path / "x360tm"
+        if not new_bin.exists():
+            raise FileNotFoundError("x360tm binary not found in archive")
+
+        dest_bin = install_dir / "x360tm"
+        # Use atomic rename so an already-running binary isn't blocked by ETXTBSY.
+        # Copy to a staging file first (same filesystem), then rename into place.
+        stage = install_dir / ".x360tm_install_stage"
+        try:
+            shutil.copy2(new_bin, stage)
+            stage.chmod(0o755)
+            os.replace(stage, dest_bin)
+        except Exception:
+            stage.unlink(missing_ok=True)
+            raise
+
+        # Icon — try archive contents first, then fall back to source tree
+        icon_dest = icon_dir / "x360tm.ico"
+        for candidate in (
+            tmp_path / "Icons" / "Icon256.ico",
+            tmp_path / "Icon256.ico",
+        ):
+            if candidate.exists():
+                shutil.copy2(candidate, icon_dest)
+                break
+        else:
+            # Running from source — use Icons/ in repo root
+            src_icon = Path(__file__).parent.parent.parent / "Icons" / "Icon256.ico"
+            if src_icon.exists():
+                shutil.copy2(src_icon, icon_dest)
+
+    # Desktop entry — always write/overwrite
+    icon_path = icon_dest if icon_dest.exists() else ""
+    desktop_content = (
+        "[Desktop Entry]\n"
+        "Version=1.0\n"
+        "Type=Application\n"
+        "Name=Xbox360 Mod Manager TUI\n"
+        "Comment=Xbox 360 game manager and transfer tool\n"
+        f"Exec={dest_bin}\n"
+        f"Icon={icon_path}\n"
+        "Terminal=true\n"
+        "Categories=System;Administration;\n"
+        "StartupNotify=false\n"
+    )
+    (desktop_dir / "x360tm.desktop").write_text(desktop_content)
+
+    # Refresh desktop/icon caches (best-effort)
+    for cmd in (
+        ["update-desktop-database", str(desktop_dir)],
+        ["gtk-update-icon-cache", "-f", "-t", str(Path.home() / ".local" / "share" / "icons" / "hicolor")],
+    ):
+        if shutil.which(cmd[0]):
+            try:
+                subprocess.run(cmd, capture_output=True, timeout=10)
+            except Exception:
+                pass
+
+
+def _install_windows(archive: Path) -> None:
+    """Extract release zip and run the bundled install.ps1."""
+    import subprocess
+
+    tmp = Path(tempfile.mkdtemp())
+    with zipfile.ZipFile(archive, "r") as zf:
+        zf.extractall(tmp)
+
+    install_script = tmp / "install.ps1"
+    if not install_script.exists():
+        raise FileNotFoundError("install.ps1 not found in archive")
+
+    subprocess.run(
+        ["powershell.exe", "-ExecutionPolicy", "Bypass", "-File", str(install_script)],
+        cwd=str(tmp),
+        check=True,
+    )

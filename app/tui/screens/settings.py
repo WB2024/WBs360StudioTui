@@ -72,6 +72,7 @@ class SettingsScreen(Screen):
             )
             with Horizontal():
                 yield Button("Check for Updates", id="check_updates", variant="primary")
+                yield Button("Install / Reinstall", id="install_app", variant="warning")
                 yield Static("", id="update_status")
 
             # ── Web Server ────────────────────────────────────────────────────
@@ -470,6 +471,56 @@ class SettingsScreen(Screen):
                 pass
         elif bid == "check_updates":
             self.run_worker(self._check_updates_worker(), exclusive=True)
+        elif bid == "install_app":
+            self.run_worker(self._install_app_worker(), exclusive=True)
+
+    async def _install_app_worker(self) -> None:
+        """Download and install/reinstall the latest release on the host OS."""
+        import platform
+        from app.core.updater import fetch_latest_release, download_update, install_release
+
+        status = self.query_one("#update_status", Static)
+        system = platform.system()
+
+        if system not in ("Linux", "Windows"):
+            status.update(f"[red]Install not supported on {system}[/]")
+            return
+
+        status.update("[yellow]Fetching latest release info…[/]")
+        try:
+            channel = self.app.settings.update_channel
+            info = await fetch_latest_release(channel)
+        except Exception as e:
+            status.update(f"[red]Failed to fetch release info: {e}[/]")
+            return
+
+        if info is None:
+            status.update("[red]No release found for this platform.[/]")
+            return
+
+        def _progress(received: int, total: int) -> None:
+            mb_recv = received // (1024 * 1024)
+            if total:
+                mb_tot = total // (1024 * 1024)
+                status.update(f"[yellow]Downloading {info.tag}… {mb_recv}/{mb_tot} MB[/]")
+            else:
+                status.update(f"[yellow]Downloading {info.tag}… {mb_recv} MB[/]")
+
+        status.update(f"[yellow]Downloading {info.tag}…[/]")
+        try:
+            archive = await download_update(info, cache_dir(), on_progress=_progress)
+        except Exception as e:
+            status.update(f"[red]Download failed: {e}[/]")
+            return
+
+        status.update("[yellow]Installing…[/]")
+        try:
+            await asyncio.to_thread(install_release, archive)
+        except Exception as e:
+            status.update(f"[red]Install failed: {e}[/]")
+            return
+
+        status.update(f"[green]✓ {info.tag} installed! Launch from your Applications menu.[/]")
 
     async def _ftp_test_worker(self, prof) -> None:
         client = FtpClient(prof.host, prof.port, prof.username, prof.password)
