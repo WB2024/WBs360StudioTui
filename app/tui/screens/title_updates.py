@@ -342,6 +342,7 @@ class TitleUpdatesScreen(Screen):
         Binding("slash", "focus_search", "Search", show=True),
         Binding("i", "install", "Install", show=True),
         Binding("r", "refresh", "Refresh", show=True),
+        Binding("o", "search_online", "Search Online", show=True),
         Binding("q", "quit", "Quit", show=True),
     ]
 
@@ -358,6 +359,7 @@ class TitleUpdatesScreen(Screen):
                     yield Input(placeholder="Search by name or Title ID…", id="search_input")
                     yield Button("Refresh [R]", id="refresh_btn")
                     yield Button("Install [I]", id="install_btn", variant="primary")
+                    yield Button("Search Online [O]", id="online_btn", variant="warning")
                 yield ModTable(id="mod_table")
             with Vertical(id="browser_right"):
                 yield ModDetail(id="detail_pane")
@@ -452,6 +454,8 @@ class TitleUpdatesScreen(Screen):
             self.action_install()
         elif event.button.id == "refresh_btn":
             self.action_refresh()
+        elif event.button.id == "online_btn":
+            self.action_search_online()
 
     # --- Actions ---
 
@@ -476,6 +480,11 @@ class TitleUpdatesScreen(Screen):
             exclusive=False,
             exit_on_error=False,
         )
+
+    def action_search_online(self) -> None:
+        # Lazy import to avoid circular dependency with xboxunity_tu
+        from app.tui.screens.xboxunity_tu import XboxUnityTuScreen
+        self.app.push_screen(XboxUnityTuScreen())
 
     def action_quit(self) -> None:
         self.app.exit()

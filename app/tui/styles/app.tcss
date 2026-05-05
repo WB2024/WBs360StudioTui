@@ -493,3 +493,75 @@ ConfirmTidyModal {
     margin: 0 0 1 0;
 }
 
+/* XboxUnity Title Update search screen */
+
+#xu_search_stage,
+#xu_tu_stage {
+    layout: horizontal;
+    height: 1fr;
+}
+
+#xu_search_left,
+#xu_tu_left {
+    width: 45%;
+    border-right: solid #1a1a2e;
+}
+
+#xu_search_right,
+#xu_tu_right {
+    width: 55%;
+    padding: 1 2;
+}
+
+#xu_search_bar {
+    height: auto;
+    padding: 1;
+    background: #111111;
+}
+
+#xu_search_bar Input {
+    width: 1fr;
+}
+
+#xu_search_bar Button {
+    width: auto;
+    margin-left: 1;
+}
+
+#xu_lib_label {
+    height: auto;
+    padding: 0 1;
+    color: #888888;
+}
+
+#xu_library_list {
+    height: 1fr;
+}
+
+#xu_tu_toolbar {
+    height: auto;
+    padding: 1;
+    background: #111111;
+}
+
+#xu_tu_toolbar Button {
+    width: auto;
+    margin-right: 1;
+}
+
+#xu_game_title {
+    height: auto;
+    padding: 0 1 1 1;
+}
+
+#xu_search_hint {
+    height: auto;
+    padding: 0 0 1 0;
+    color: #888888;
+}
+
+#xu_tu_detail {
+    height: 1fr;
+    overflow-y: auto;
+}
+

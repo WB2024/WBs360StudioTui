@@ -17,6 +17,12 @@ GAME_PATCHES_XBOX = f"{BASE_URL}/data/xbox360/game-patches.zip"
 GAME_SAVES = f"{BASE_URL}/data/game-saves.json"
 TITLE_IDS_XBOX = f"{BASE_URL}/data/xbox360/titleids.json"
 
+# --- XboxUnity.net endpoints ---
+XBOXUNITY_BASE = "https://xboxunity.net"
+XBOXUNITY_TITLE_LIST = f"{XBOXUNITY_BASE}/Resources/Lib/TitleList.php"
+XBOXUNITY_TU_INFO = f"{XBOXUNITY_BASE}/Resources/Lib/TitleUpdateInfo.php"
+XBOXUNITY_TU_DOWNLOAD = f"{XBOXUNITY_BASE}/Resources/Lib/TitleUpdate.php"
+
 # Default HTTP timeout (seconds)
 HTTP_TIMEOUT = 30.0
 
