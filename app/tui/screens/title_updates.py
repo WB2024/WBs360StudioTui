@@ -6,13 +6,13 @@ from typing import Any
 
 from textual.app import ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal, Vertical
+from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen, Screen
 from textual.widgets import Button, Footer, Header, Input, Label, ListItem, ListView, Static
 
 from app.core.ftp_client import FtpClient
 from app.core.installer import InstallResult
-from app.core.tu_scanner import scan_local_title_updates
+from app.core.tu_scanner import read_stfs_info, scan_local_title_updates
 from app.core.usb_manager import UsbManager
 from app.models.title_update import TitleUpdateItem
 from app.tui.screens.connection import ConnectionScreen
@@ -42,6 +42,140 @@ def _drive_from_path(xbox_path: str) -> str:
         return "Usb1"
     part = xbox_path.replace("\\", "/").split("/")[0].rstrip(":")
     return part if part else "Usb1"
+
+
+# ---------------------------------------------------------------------------
+# Compatibility check modal
+# ---------------------------------------------------------------------------
+
+class TuCompatibilityModal(ModalScreen[bool]):
+    """Show a Media ID compatibility verdict before installing a Title Update.
+
+    Returns True  → user confirmed, proceed with install.
+    Returns False → user cancelled.
+
+    The modal is purely informational for ``"unknown"`` and ``"compatible"``
+    outcomes (Proceed is the obvious default).  For ``"incompatible"`` the
+    Proceed button is labelled ``"Force Install"`` and styled as a warning.
+    """
+
+    BINDINGS = [("escape", "cancel", "Cancel")]
+
+    DEFAULT_CSS = """
+    TuCompatibilityModal { align: center middle; }
+    #compat_box {
+        width: 70; height: auto;
+        border: thick $primary; background: $surface; padding: 1 2;
+    }
+    #compat_verdict { margin-top: 1; }
+    #compat_variants { margin: 1 0; color: $text-muted; max-height: 8; overflow-y: auto; }
+    #compat_box Button { width: 100%; margin-top: 1; }
+    """
+
+    def __init__(self, tu: TitleUpdateItem, db: Any, library: dict[str, str]) -> None:
+        super().__init__()
+        self._tu = tu
+        self._db = db
+        self._library = library
+
+    # ---- build verdict strings -------------------------------------------
+
+    def _build_content(self) -> tuple[str, str, str, list[str], bool]:
+        """Return (verdict_code, verdict_markup, info_markup, variants, is_incompatible).
+
+        All failures are caught and mapped to 'unknown' so the modal always
+        renders something sensible.
+        """
+        try:
+            tu_info = read_stfs_info(self._tu.local_path)
+            tu_mid = tu_info.media_id if tu_info.ok else ""
+        except Exception:
+            tu_mid = ""
+
+        title_id = self._tu.title_id.upper()
+        known = self._db.get_known_media_ids(title_id)
+        verdict_code = self._db.check_tu_media_compatibility(tu_mid, title_id)
+        in_library = title_id in {k.upper() for k in self._library}
+
+        # Build human-readable variant list
+        variants: list[str] = []
+        for mid in known:
+            marker = " [green](✓ matches this TU)[/]" if mid == tu_mid.upper() else ""
+            variants.append(f"  • {mid}{marker}")
+
+        # Info line about game presence
+        if not in_library:
+            info = (
+                "[dim]ℹ  Game not found in console library — "
+                "run a Library Scan to detect installed games. "
+                "You can still pre-install a TU.[/dim]"
+            )
+        else:
+            info = "[dim]ℹ  Game detected in console library.[/dim]"
+
+        # Verdict markup
+        if verdict_code == "compatible":
+            verdict = (
+                f"[b green]✅  COMPATIBLE[/b green]\n"
+                f"[dim]TU Media ID [b]{tu_mid}[/b] matches a known disc variant.[/dim]"
+            )
+        elif verdict_code == "incompatible":
+            mid_display = tu_mid or "(unknown)"
+            verdict = (
+                f"[b red]⚠️  INCOMPATIBLE[/b red]\n"
+                f"[dim]TU Media ID [b]{mid_display}[/b] does not match "
+                f"any known disc variant of this game.\n"
+                f"Installing the wrong TU can cause instability.[/dim]"
+            )
+        else:  # unknown
+            if not tu_mid or tu_mid == "00000000":
+                reason = "the TU file does not contain a readable Media ID"
+            elif not known:
+                reason = "no disc variants are recorded for this game in the database"
+            else:
+                reason = "data is incomplete"
+            verdict = (
+                f"[b yellow]❓  UNKNOWN[/b yellow]\n"
+                f"[dim]Cannot verify compatibility — {reason}.\n"
+                f"The TU is likely fine; proceed with caution.[/dim]"
+            )
+
+        return verdict_code, verdict, info, variants, verdict_code == "incompatible"
+
+    # ---- compose ----------------------------------------------------------
+
+    def compose(self) -> ComposeResult:
+        verdict_code, verdict, info, variants, is_incompatible = self._build_content()
+        with Vertical(id="compat_box"):
+            yield Static("[b cyan]TU Compatibility Check[/b cyan]")
+            yield Static(
+                f"[b]{self._tu.display_name}[/b]\n"
+                f"Title ID: [yellow]{self._tu.title_id}[/yellow]"
+            )
+
+            if variants:
+                yield Static("\n[dim]Known disc variants (Media IDs):[/dim]")
+                yield Static("\n".join(variants), id="compat_variants")
+            else:
+                yield Static(
+                    "[dim]No disc variant data available for this game.[/dim]",
+                    id="compat_variants",
+                )
+
+            yield Static(verdict, id="compat_verdict")
+            yield Static(info)
+
+            if is_incompatible:
+                yield Button("Force Install ⚠️", id="compat_proceed", variant="warning")
+            else:
+                yield Button("Proceed", id="compat_proceed", variant="primary")
+            yield Button("Cancel", id="compat_cancel")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        self.dismiss(event.button.id == "compat_proceed")
+
+    def action_cancel(self) -> None:
+        self.dismiss(False)
 
 
 # ---------------------------------------------------------------------------
@@ -112,10 +246,20 @@ class UsbChoiceModal(ModalScreen[str | None]):
 # ---------------------------------------------------------------------------
 
 async def run_tu_install_flow(app: Any, tu: TitleUpdateItem) -> None:
-    """Orchestrate a Title Update install: pick method → connect → transfer."""
+    """Orchestrate a Title Update install: pick method → compatibility check → connect → transfer."""
     method: str | None = await app.push_screen_wait(TuInstallChoiceModal())
     if not method:
         return
+
+    # Compatibility check — always runs, never blocks the install
+    db = getattr(app, "db", None)
+    library: dict[str, str] = getattr(app, "library", {})
+    if db is not None:
+        proceed: bool = await app.push_screen_wait(
+            TuCompatibilityModal(tu, db, library)
+        )
+        if not proceed:
+            return
 
     # Derive the target drive from the configured game install path
     game_drive = _drive_from_path(app.settings.game_install_path or "Usb1")

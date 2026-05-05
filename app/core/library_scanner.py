@@ -43,6 +43,36 @@ def load_csv_titles(csv_path: Path) -> dict[str, str]:
     return result
 
 
+def load_csv_media_ids(csv_path: Path) -> dict[str, list[str]]:
+    """Load gamelist_xbox360.csv → {TITLE_ID_UPPER: [media_id, ...]}.
+
+    Each TitleID can appear more than once (one row per regional disc variant).
+    Only non-empty, non-zero Media IDs are included — rows with a blank or
+    all-zero Media ID are silently skipped so callers never have to filter.
+
+    Returns an empty dict if the file is missing or unreadable; callers should
+    treat a missing key as "no data" rather than "no match".
+    """
+    result: dict[str, list[str]] = {}
+    if not csv_path.exists():
+        return result
+    try:
+        with csv_path.open(newline="", encoding="utf-8") as f:
+            reader = csv.DictReader(f, delimiter="\t")
+            for row in reader:
+                tid = (row.get("title_id") or "").strip().upper()
+                mid = (row.get("media_id") or "").strip().upper()
+                # Skip rows with no Title ID, no Media ID, or an all-zero Media ID
+                if not tid or not mid or mid == "00000000":
+                    continue
+                result.setdefault(tid, [])
+                if mid not in result[tid]:
+                    result[tid].append(mid)
+    except Exception:
+        log.exception("Failed loading CSV media IDs from %s", csv_path)
+    return result
+
+
 async def scan_library(
     client: "FtpClient",
     game_paths: list[str],

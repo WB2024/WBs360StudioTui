@@ -146,6 +146,95 @@ def read_stfs_info(path: str | Path) -> "StfsInfo":
     )
 
 
+# ---------------------------------------------------------------------------
+# Unified game-file reader (STFS + ISO)
+# ---------------------------------------------------------------------------
+
+import re
+import subprocess
+
+_STFS_MAGICS_STR = {"CON ", "LIVE", "PIRS"}
+
+
+def read_game_info(path: str | Path) -> StfsInfo:
+    """Read Title ID and Media ID from either an STFS container or an Xbox 360 ISO.
+
+    - STFS containers (GOD/CON/LIVE/PIRS): parsed directly from the binary header,
+      no external tools required.
+    - ISO files: parsed by calling ``abgx360`` as a subprocess and parsing its
+      stdout/stderr.  Requires ``abgx360`` to be installed on the system.
+
+    Title Update files are always STFS, so they should still go through
+    :func:`read_stfs_info` directly.  Use this function only for game files,
+    which may be in either format.
+
+    Returns a :class:`StfsInfo` instance.  On failure ``StfsInfo.ok`` is
+    ``False`` and ``StfsInfo.error`` contains a human-readable reason.
+    """
+    p = Path(path)
+    try:
+        with p.open("rb") as f:
+            magic_bytes = f.read(4).decode("ascii", errors="replace")
+    except FileNotFoundError:
+        return StfsInfo(error=f"File not found: {p}")
+    except OSError as e:
+        return StfsInfo(error=f"Cannot read file: {e}")
+
+    if magic_bytes in _STFS_MAGICS_STR:
+        return read_stfs_info(p)
+
+    return _read_iso_info(p)
+
+
+def _read_iso_info(path: Path) -> StfsInfo:
+    """Extract Title ID and Media ID from an Xbox 360 ISO using ``abgx360``.
+
+    ``abgx360`` is an external command-line tool; if it is not installed an
+    :class:`StfsInfo` with a clear error message is returned rather than raising.
+    """
+    try:
+        result = subprocess.run(
+            ["abgx360", "--noupdate", "-w", str(path)],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+    except FileNotFoundError:
+        return StfsInfo(
+            error=(
+                "abgx360 is not installed — it is required to read ISO files. "
+                "See the README (External Dependencies) for install instructions."
+            )
+        )
+    except subprocess.TimeoutExpired:
+        return StfsInfo(error="abgx360 timed out reading the ISO.")
+    except OSError as e:
+        return StfsInfo(error=f"Failed to run abgx360: {e}")
+
+    output = result.stdout + result.stderr
+
+    title_id_match = re.search(r"Title ID\s*[:\-]\s*([0-9A-Fa-f]{8})", output)
+    media_id_match = re.search(r"Media ID\s*[:\-]\s*([0-9A-Fa-f]{8})", output)
+    title_name_match = re.search(r"Title Name\s*[:\-]\s*(.+)", output)
+
+    if not title_id_match or not media_id_match:
+        return StfsInfo(
+            error=f"abgx360 could not parse Title ID / Media ID from: {path.name}"
+        )
+
+    return StfsInfo(
+        magic="ISO",
+        title_id=title_id_match.group(1).upper(),
+        media_id=media_id_match.group(1).upper(),
+        title_name=title_name_match.group(1).strip() if title_name_match else path.stem,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Local TU scanner
+# ---------------------------------------------------------------------------
+
+def scan_local_title_updates(path: str | Path | None = None) -> list[TitleUpdateItem]:
     """Scan *path* (defaults to LocalTitleUpdates/) for TU STFS packages.
 
     Each file is inspected for a valid STFS header with content type 0x000B0000.

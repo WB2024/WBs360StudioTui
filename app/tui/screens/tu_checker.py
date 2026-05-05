@@ -14,7 +14,7 @@ from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import Screen
 from textual.widgets import Button, Footer, Header, Input, Static
 
-from app.core.tu_scanner import StfsInfo, read_stfs_info
+from app.core.tu_scanner import StfsInfo, read_stfs_info, read_game_info
 from app.tui.widgets.connection_bar import ConnectionBar
 from app.tui.widgets.status_bar import StatusBar
 
@@ -47,8 +47,8 @@ class TuCheckerScreen(Screen):
             # ── Game file ────────────────────────────────────────────────
             yield Static("\n[b]Game File[/b]")
             yield Static(
-                "[dim]Path to the game's STFS package (e.g. the default.xex container "
-                "or the content package inside the game folder).[/dim]",
+                "[dim]Path to the game file — either an STFS container (GOD format) "
+                "or an Xbox 360 ISO disc image.[/dim]",
             )
             with Horizontal(id="game_row"):
                 yield Input(
@@ -161,7 +161,7 @@ class TuCheckerScreen(Screen):
 
         self._set_status("Reading STFS headers…")
 
-        game = read_stfs_info(game_path_str)
+        game = read_game_info(game_path_str)
         tu = read_stfs_info(tu_path_str)
 
         output: list[str] = ["\n"]

@@ -13,7 +13,7 @@ from typing import Any, Optional
 
 from app.config.settings import cache_dir
 from app.core import constants as C
-from app.core.library_scanner import load_csv_titles
+from app.core.library_scanner import load_csv_media_ids, load_csv_titles
 from app.core.local_library import (
     load_local_game_saves,
     load_local_homebrew,
@@ -72,6 +72,9 @@ class DatabaseManager:
         self.local_game_saves: list[GameSaveItemData] = []
         # CSV title lookup supplementing the Arisen title_ids.json.
         self.csv_titles: dict[str, str] = self._load_csv_titles()
+        # CSV media-ID lookup: title_id → [media_id, ...] per regional variant.
+        # Keys only exist when the CSV row has a non-empty, non-zero Media ID.
+        self.csv_media_ids: dict[str, list[str]] = self._load_csv_media_ids()
 
         self.last_fetch: Optional[datetime] = None
 
@@ -204,6 +207,59 @@ class DatabaseManager:
         """Load bundled gamelist_xbox360.csv from project root (if present)."""
         csv_path = Path(__file__).parent.parent.parent / "gamelist_xbox360.csv"
         return load_csv_titles(csv_path)
+
+    def _load_csv_media_ids(self) -> dict[str, list[str]]:
+        """Load Media IDs from the bundled CSV.  Returns {} if file is missing."""
+        csv_path = Path(__file__).parent.parent.parent / "gamelist_xbox360.csv"
+        return load_csv_media_ids(csv_path)
+
+    # --- Media ID / TU compatibility helpers ---
+
+    def get_known_media_ids(self, title_id: str) -> list[str]:
+        """Return all known disc Media IDs for *title_id* from the bundled CSV.
+
+        Returns an empty list when the game is not in the CSV or when every
+        CSV row for that game has a blank/zero Media ID (i.e. data is absent).
+        Callers must treat an empty list as "unknown" — not as "no match".
+        """
+        if not title_id:
+            return []
+        return list(self.csv_media_ids.get(title_id.upper(), []))
+
+    def check_tu_media_compatibility(
+        self, tu_media_id: str, title_id: str
+    ) -> str:
+        """Check whether a Title Update's Media ID is compatible with *title_id*.
+
+        Returns one of three string literals:
+          ``"compatible"``   — TU media_id matches a known disc variant.
+          ``"incompatible"`` — TU media_id is present but matches no known variant.
+          ``"unknown"``      — Cannot determine (missing data on either side);
+                               the app should allow the install but warn the user.
+
+        This method NEVER raises.  Any data-quality issue (blank IDs, missing
+        CSV entry) results in ``"unknown"`` so the install flow is never blocked
+        by missing reference data.
+        """
+        try:
+            # Normalise both sides to uppercase, strip whitespace
+            tu_mid = (tu_media_id or "").strip().upper()
+            tid = (title_id or "").strip().upper()
+
+            # If either side has no usable ID, we can't make a determination
+            if not tu_mid or tu_mid == "00000000" or not tid:
+                return "unknown"
+
+            known = self.get_known_media_ids(tid)
+            if not known:
+                # CSV has no media_id data for this game → can't compare
+                return "unknown"
+
+            return "compatible" if tu_mid in known else "incompatible"
+        except Exception:
+            # Defensive: any unexpected error must not block the install flow
+            log.exception("check_tu_media_compatibility failed — returning 'unknown'")
+            return "unknown"
 
     def _load_mod_list(self, key: str) -> list[ModItemData]:
         data = self._load_json(key)
