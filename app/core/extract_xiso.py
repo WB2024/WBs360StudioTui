@@ -27,9 +27,8 @@ EXTRACT_XISO_VERSION = "v2.7.1"
 
 
 def _tools_dir() -> Path:
-    p = Path(user_data_dir(APP_NAME)) / "tools"
-    p.mkdir(parents=True, exist_ok=True)
-    return p
+    # Bundled tools shipped with the repo: <repo_root>/tools/
+    return Path(__file__).resolve().parent.parent.parent / "tools"
 
 
 def _binary_name() -> str:
