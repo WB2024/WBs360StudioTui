@@ -256,12 +256,25 @@ class MultiDiscScreen(Screen):
         modal.set_stage("Step 1/2  —  Extracting install disc...", 0, 0)
         modal.set_detail(f"Source: {install_iso_path.name}")
 
+        _files_extracted = 0
+
+        def _on_xiso_line(line: str) -> None:
+            nonlocal _files_extracted
+            # extract-xiso emits "creating <path>" for each file/dir
+            if line.startswith("creating "):
+                _files_extracted += 1
+                modal.set_stage(
+                    f"Step 1/2  —  Extracting install disc... ({_files_extracted} files)",
+                    0, 0,
+                )
+            modal.set_detail(line)
+
         try:
             await extract_xiso_core.extract_iso(
                 iso_path=install_iso_path,
                 output_dir=Path(output_dir),
                 binary=xiso_binary,
-                on_line=lambda line: modal.set_detail(line),
+                on_line=_on_xiso_line,
             )
         except extract_xiso_core.ExtractXisoError as e:
             modal.set_done(f"Extraction failed: {e}", success=False)
@@ -315,17 +328,28 @@ class MultiDiscScreen(Screen):
 
         prog = iso2god_core.ConversionProgress()
 
+        _STAGE_LABELS = {
+            "initializing": "initializing",
+            "reading ISO": "reading ISO",
+            "clearing output": "clearing output dir",
+            "hashing": "hashing sectors",
+            "writing": "writing GOD parts",
+            "writing header": "writing header",
+            "done": "done",
+        }
+
         def _on_god_progress(p: iso2god_core.ConversionProgress) -> None:
             nonlocal prog
             prog = p
+            label = _STAGE_LABELS.get(p.stage, p.stage)
             if p.parts_total > 0:
                 modal.set_stage(
-                    f"Step 2/2  —  Writing GOD parts...",
+                    f"Step 2/2  —  GOD: {label} ({p.parts_done}/{p.parts_total} parts)",
                     p.parts_done,
                     p.parts_total,
                 )
             else:
-                modal.set_stage(f"Step 2/2  —  GOD: {p.stage}...", 0, 0)
+                modal.set_stage(f"Step 2/2  —  GOD: {label}...", 0, 0)
 
         try:
             final = await iso2god_core.convert_iso(

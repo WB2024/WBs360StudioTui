@@ -260,11 +260,19 @@ ProgressModal {
 }
 
 ProgressModal > Vertical {
-    width: 70;
+    width: 80;
     height: auto;
     border: round #00d4ff;
     background: #1a1a2e;
     padding: 2 3;
+}
+
+#pm_log {
+    height: 12;
+    border: solid #333333;
+    background: #0a0a14;
+    margin: 1 0;
+    padding: 0 1;
 }
 
 ConnectionScreen {

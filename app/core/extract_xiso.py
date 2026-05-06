@@ -81,10 +81,17 @@ async def extract_iso(
     assert proc.stdout is not None
 
     async for raw in proc.stdout:
-        line = raw.decode("utf-8", errors="replace").rstrip()
-        log.debug("extract-xiso: %s", line)
-        if on_line:
-            on_line(line)
+        # extract-xiso uses \r for in-place progress; a single readline()
+        # chunk may contain many \r-separated segments.  Split them so
+        # each meaningful segment is reported individually.
+        chunk = raw.decode("utf-8", errors="replace").rstrip("\n")
+        for segment in chunk.split("\r"):
+            line = segment.strip()
+            if not line:
+                continue
+            log.debug("extract-xiso extract: %s", line)
+            if on_line:
+                on_line(line)
 
     await proc.wait()
     if proc.returncode != 0:
@@ -121,10 +128,14 @@ async def create_iso(
     assert proc.stdout is not None
 
     async for raw in proc.stdout:
-        line = raw.decode("utf-8", errors="replace").rstrip()
-        log.debug("extract-xiso: %s", line)
-        if on_line:
-            on_line(line)
+        chunk = raw.decode("utf-8", errors="replace").rstrip("\n")
+        for segment in chunk.split("\r"):
+            line = segment.strip()
+            if not line:
+                continue
+            log.debug("extract-xiso create: %s", line)
+            if on_line:
+                on_line(line)
 
     await proc.wait()
     if proc.returncode != 0:
