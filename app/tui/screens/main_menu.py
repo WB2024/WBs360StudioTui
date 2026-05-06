@@ -22,6 +22,7 @@ from app.tui.screens.transfer_games import TransferGamesScreen
 from app.tui.screens.torrent_picker import TorrentPickerScreen
 from app.tui.screens.bad_avatar import BadAvatarScreen
 from app.tui.screens.utilities import UtilitiesScreen
+from app.tui.screens.multidisc import MultiDiscScreen
 from app.tui.widgets.connection_bar import ConnectionBar
 
 
@@ -57,6 +58,7 @@ class MainMenuScreen(Screen):
                         yield Button("Title Updates", id="m_tu", classes="menu_button", variant="warning")
                         yield Button("Transfer Games", id="m_tg", classes="menu_button", variant="warning")
                         yield Button("ISO \u2192 GOD", id="m_iso", classes="menu_button", variant="warning")
+                        yield Button("Multi-Disc Setup", id="m_multidisc", classes="menu_button", variant="warning")
                     # Col 4: Advanced / Exploit Tools (all pink/error)
                     with Vertical(classes="menu_col"):
                         yield Button("New Game Processing", id="m_pip", classes="menu_button", variant="error")
@@ -98,6 +100,7 @@ class MainMenuScreen(Screen):
             "m_tu": TitleUpdatesScreen,
             "m_tg": TransferGamesScreen,
             "m_iso": Iso2GodScreen,
+            "m_multidisc": MultiDiscScreen,
             "m_tor": TorrentPickerScreen,
             "m_pip": NewGamePipelineScreen,
             "m_ftp": FtpBrowserScreen,

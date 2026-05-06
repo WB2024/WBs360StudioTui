@@ -95,6 +95,13 @@ class Settings:
     web_server_enabled: bool = False
     web_server_host: str = "0.0.0.0"
     web_server_port: int = 8360
+    # X360Forge tool binary paths (empty = look in ~/.local/share/x360tm/tools/)
+    extract_xiso_binary_path: str = ""
+    god2iso_binary_path: str = ""
+    abgx360_binary_path: str = ""
+    # X360Forge default source/output folders (optional convenience — can be overridden per-operation)
+    xforge_source_path: str = ""
+    xforge_output_path: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -137,6 +144,11 @@ class Settings:
             "web_server_enabled": self.web_server_enabled,
             "web_server_host": self.web_server_host,
             "web_server_port": self.web_server_port,
+            "extract_xiso_binary_path": self.extract_xiso_binary_path,
+            "god2iso_binary_path": self.god2iso_binary_path,
+            "abgx360_binary_path": self.abgx360_binary_path,
+            "xforge_source_path": self.xforge_source_path,
+            "xforge_output_path": self.xforge_output_path,
         }
 
     @classmethod
@@ -185,6 +197,11 @@ class Settings:
             web_server_enabled=bool(d.get("web_server_enabled", False)),
             web_server_host=d.get("web_server_host", "0.0.0.0"),
             web_server_port=int(d.get("web_server_port", 8360)),
+            extract_xiso_binary_path=d.get("extract_xiso_binary_path", ""),
+            god2iso_binary_path=d.get("god2iso_binary_path", ""),
+            abgx360_binary_path=d.get("abgx360_binary_path", ""),
+            xforge_source_path=d.get("xforge_source_path", ""),
+            xforge_output_path=d.get("xforge_output_path", ""),
         )
 
     # --- Profile mgmt ---

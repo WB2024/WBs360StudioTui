@@ -27,6 +27,7 @@ class UtilitiesScreen(Screen):
             yield Button("Game Directory Tidy-up", id="u_tidy", variant="primary", classes="menu_button")
             yield Button("USB Backup / Restore", id="u_backup", variant="primary", classes="menu_button")
             yield Button("TU Compatibility Checker", id="u_tu_check", variant="primary", classes="menu_button")
+            yield Button("X360Forge Tools", id="u_xforge", variant="primary", classes="menu_button")
             yield Button("Back [Esc]", id="u_back", classes="menu_button")
         yield StatusBar(id="status_bar")
         yield Footer()
@@ -49,6 +50,9 @@ class UtilitiesScreen(Screen):
         elif event.button.id == "u_tu_check":
             from app.tui.screens.tu_checker import TuCheckerScreen
             self.app.push_screen(TuCheckerScreen())
+        elif event.button.id == "u_xforge":
+            from app.tui.screens.xforge_tools import XForgeToolsScreen
+            self.app.push_screen(XForgeToolsScreen())
         elif event.button.id == "u_back":
             self.app.pop_screen()
 

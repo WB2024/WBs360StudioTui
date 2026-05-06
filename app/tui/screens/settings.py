@@ -239,7 +239,48 @@ class SettingsScreen(Screen):
                 placeholder="Leave empty for default",
                 id="backup_dir",
             )
+            yield Static("\n[b cyan]X360Forge Tools[/b cyan]")
+            yield Static("[dim]Binary paths and default folder paths for X360Forge ISO utilities.[/]")
 
+            yield Static("\n[b]extract-xiso Binary Path[/b]")
+            yield Static("[dim]Full path to the extract-xiso binary.  Leave empty to use ~/.local/share/x360tm/tools/extract-xiso.[/]")
+            yield Input(
+                value=self.app.settings.extract_xiso_binary_path,
+                placeholder="e.g. /usr/local/bin/extract-xiso",
+                id="extract_xiso_binary_path",
+            )
+
+            yield Static("\n[b]god2iso Binary Path[/b]")
+            yield Static("[dim]Full path to the god2iso binary.  Leave empty to use ~/.local/share/x360tm/tools/god2iso.[/]")
+            yield Input(
+                value=self.app.settings.god2iso_binary_path,
+                placeholder="e.g. /usr/local/bin/god2iso",
+                id="god2iso_binary_path",
+            )
+
+            yield Static("\n[b]abgx360 Binary Path[/b]")
+            yield Static("[dim]Full path to the abgx360 binary.  Leave empty to use ~/.local/share/x360tm/tools/abgx360.[/]")
+            yield Input(
+                value=self.app.settings.abgx360_binary_path,
+                placeholder="e.g. /usr/local/bin/abgx360",
+                id="abgx360_binary_path",
+            )
+
+            yield Static("\n[b]Default Source Folder[/b]")
+            yield Static("[dim]Default source folder pre-filled in X360Forge Tools screens (ISO folder, game folder).[/]")
+            yield Input(
+                value=self.app.settings.xforge_source_path,
+                placeholder="e.g. /home/user/Xbox360/ISOs",
+                id="xforge_source_path",
+            )
+
+            yield Static("\n[b]Default Output Folder[/b]")
+            yield Static("[dim]Default output folder pre-filled in X360Forge Tools screens.[/]")
+            yield Input(
+                value=self.app.settings.xforge_output_path,
+                placeholder="e.g. /home/user/Xbox360/Output",
+                id="xforge_output_path",
+            )
             # ── Console Paths ─────────────────────────────────────────────────
             yield Static("\n[b cyan]Console Paths[/]")
 
@@ -449,6 +490,11 @@ class SettingsScreen(Screen):
             app.settings.homebrew_install_path = self.query_one("#homebrew_install_path", Input).value.strip()
             app.settings.game_save_install_path = self.query_one("#game_save_install_path", Input).value.strip()
             app.settings.title_update_install_path = self.query_one("#title_update_install_path", Input).value.strip()
+            app.settings.extract_xiso_binary_path = self.query_one("#extract_xiso_binary_path", Input).value.strip()
+            app.settings.god2iso_binary_path = self.query_one("#god2iso_binary_path", Input).value.strip()
+            app.settings.abgx360_binary_path = self.query_one("#abgx360_binary_path", Input).value.strip()
+            app.settings.xforge_source_path = self.query_one("#xforge_source_path", Input).value.strip()
+            app.settings.xforge_output_path = self.query_one("#xforge_output_path", Input).value.strip()
             app.settings.auto_update = self.query_one("#auto_update", Switch).value
             sel = self.query_one("#update_channel", Select)
             if sel.value and sel.value is not Select.BLANK:
