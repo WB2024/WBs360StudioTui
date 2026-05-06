@@ -76,6 +76,7 @@ async def extract_iso(
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.STDOUT,
         cwd=str(output_dir),
+        limit=2 ** 23,  # 8 MB — extract-xiso can emit very long lines
     )
     assert proc.stdout is not None
 
@@ -115,6 +116,7 @@ async def create_iso(
         *cmd,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.STDOUT,
+        limit=2 ** 23,  # 8 MB
     )
     assert proc.stdout is not None
 

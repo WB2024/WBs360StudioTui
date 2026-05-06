@@ -16,7 +16,6 @@ the async Textual TUI.
 """
 from __future__ import annotations
 
-import asyncio
 from pathlib import Path
 from typing import Any
 
@@ -64,12 +63,10 @@ class MultiDiscScreen(Screen):
             # ── Step 1: ISO folder ────────────────────────────────────────────
             yield Static("\n[b]Step 1 — Select ISO Folder[/b]")
             yield Static("[dim]The folder containing both disc ISOs.[/]")
-            with Horizontal(classes="xf_path_row"):
-                yield Input(
-                    placeholder="Folder containing the two ISO files",
-                    id="md_iso_folder",
-                )
-                yield Button("Browse", id="md_browse_iso", classes="xf_browse")
+            yield Input(
+                placeholder="Folder containing the two ISO files",
+                id="md_iso_folder",
+            )
             with Horizontal(classes="xf_btn_row"):
                 yield Button("Scan for ISOs", id="md_scan", variant="primary")
             yield Static("", id="md_scan_status", classes="muted")
@@ -101,12 +98,10 @@ class MultiDiscScreen(Screen):
             yield Static(
                 "[dim]Where the extracted content folder and GOD files will be placed.[/]"
             )
-            with Horizontal(classes="xf_path_row"):
-                yield Input(
-                    placeholder="Output folder for extracted content and GOD files",
-                    id="md_output_folder",
-                )
-                yield Button("Browse", id="md_browse_output", classes="xf_browse")
+            yield Input(
+                placeholder="Output folder for extracted content and GOD files",
+                id="md_output_folder",
+            )
 
             yield Rule()
 
@@ -114,11 +109,12 @@ class MultiDiscScreen(Screen):
             yield Static("\n[b]Optional — FTP Transfer content/ Folder[/b]")
             yield Static(
                 "[dim]After extracting the install disc, upload the content/ folder\n"
-                "to the console via FTP.  Uses the default FTP profile from Settings.[/]"
+                "to the console via FTP.  Uses the default FTP profile from Settings.\n"
+                "Toggle the switch ON to enable.[/]"
             )
-            with Horizontal():
-                yield Static("Transfer content/ via FTP  ")
+            with Horizontal(classes="xf_path_row"):
                 yield Switch(id="md_ftp_switch", value=False)
+                yield Static("  Transfer content/ via FTP after extraction")
 
             yield Rule()
 
@@ -160,37 +156,13 @@ class MultiDiscScreen(Screen):
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         bid = event.button.id
-        if bid == "md_browse_iso":
-            self.app.run_worker(self._browse("#md_iso_folder", "Select ISO folder"), exclusive=False)
-        elif bid == "md_browse_output":
-            self.app.run_worker(self._browse("#md_output_folder", "Select output folder"), exclusive=False)
-        elif bid == "md_scan":
+        if bid == "md_scan":
             self.app.run_worker(self._scan_isos(), exclusive=False)
         elif bid == "md_run":
             self.app.run_worker(self._run_multidisc(), exclusive=True)
         elif bid == "md_back":
             self.app.pop_screen()
 
-    # ── Browse helper ─────────────────────────────────────────────────────────
-
-    async def _browse(self, input_id: str, title: str) -> None:
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                "zenity", "--file-selection", "--directory", f"--title={title}",
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.DEVNULL,
-            )
-            stdout, _ = await proc.communicate()
-            if proc.returncode == 0:
-                path = stdout.decode().strip()
-                if path:
-                    self.query_one(input_id, Input).value = path
-                    return
-        except FileNotFoundError:
-            pass
-        self._set_status("Browse: zenity not available — type the path directly.")
-
-    # ── ISO scan worker ───────────────────────────────────────────────────────
 
     async def _scan_isos(self) -> None:
         folder = self.query_one("#md_iso_folder", Input).value.strip()
