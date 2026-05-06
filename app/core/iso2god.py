@@ -28,9 +28,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
-from platformdirs import user_data_dir
 
-from app.core.constants import APP_NAME
 
 log = logging.getLogger(__name__)
 
